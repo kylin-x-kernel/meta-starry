@@ -48,6 +48,7 @@ do_compile() {
     export CARGO_BUILD_TARGET="${RUST_TARGET}"
     export RUSTC_BOOTSTRAP=1
     
+    
     bbnote "Building StarryOS for ${RUST_TARGET} with features: ${CARGO_FEATURES}"
     
     # 直接使用 cargo build（不通过 Makefile）
