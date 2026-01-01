@@ -2,12 +2,13 @@ SUMMARY = "Rust compiler and runtime libaries"
 HOMEPAGE = "http://www.rust-lang.org"
 SECTION = "devel"
 LICENSE = "MIT | Apache-2.0"
+LIC_FILES_CHKSUM = "file://COPYRIGHT;md5=11a3899825f4376896e438c8c753f8dc"
 
 inherit rust
 inherit cargo_common
 
 DEPENDS += "file-native python3-native"
-DEPENDS:append:class-native = " rust-llvm-native"
+DEPENDS:append:class-native = " rust-llvm-native openssl-native pkgconfig-native"
 
 S = "${RUSTSRC}"
 
@@ -26,7 +27,7 @@ CARGO_DISABLE_BITBAKE_VENDORING = "1"
 
 # We can't use RUST_BUILD_SYS here because that may be "musl" if
 # TCLIBC="musl". Snapshots are always -unknown-linux-gnu
-SNAPSHOT_BUILD_SYS = "${BUILD_ARCH}-unknown-linux-gnu"
+SNAPSHOT_BUILD_SYS = "${RUST_BUILD_ARCH}-unknown-linux-gnu"
 setup_cargo_environment () {
     # The first step is to build bootstrap and some early stage tools,
     # these are build for the same target as the snapshot, e.g.
@@ -34,10 +35,8 @@ setup_cargo_environment () {
     # Later stages are build for the native target (i.e. target.x86_64-linux)
     cargo_common_do_configure
 
-    if [ "${SNAPSHOT_BUILD_SYS}" != "${RUST_BUILD_SYS}" ]; then
-        printf '[target.%s]\n' "${SNAPSHOT_BUILD_SYS}" >> ${CARGO_HOME}/config
-        printf "linker = '%s'\n" "${RUST_BUILD_CCLD}" >> ${CARGO_HOME}/config
-    fi
+    printf '[target.%s]\n' "${SNAPSHOT_BUILD_SYS}" >> ${CARGO_HOME}/config
+    printf "linker = '%s'\n" "${RUST_BUILD_CCLD}" >> ${CARGO_HOME}/config
 }
 
 include rust-common.inc
@@ -80,7 +79,7 @@ python do_configure() {
     config = configparser.RawConfigParser()
 
     # [target.ARCH-poky-linux]
-    target_section = "target.{}".format(d.getVar('TARGET_SYS', True))
+    target_section = "target.{}".format(d.getVar('TARGET_SYS'))
     config.add_section(target_section)
 
     llvm_config = d.expand("${YOCTO_ALTERNATE_EXE_PATH}")
@@ -91,7 +90,7 @@ python do_configure() {
 
     # If we don't do this rust-native will compile it's own llvm for BUILD.
     # [target.${BUILD_ARCH}-unknown-linux-gnu]
-    target_section = "target.{}".format(d.getVar('SNAPSHOT_BUILD_SYS', True))
+    target_section = "target.{}".format(d.getVar('SNAPSHOT_BUILD_SYS'))
     config.add_section(target_section)
 
     config.set(target_section, "llvm-config", e(llvm_config))
@@ -125,39 +124,28 @@ python do_configure() {
     config.set("build", "vendor", e(True))
 
     if not "targets" in locals():
-        targets = [d.getVar("TARGET_SYS", True)]
+        targets = [d.getVar("TARGET_SYS")]
     config.set("build", "target", e(targets))
 
     if not "hosts" in locals():
-        hosts = [d.getVar("HOST_SYS", True)]
+        hosts = [d.getVar("HOST_SYS")]
     config.set("build", "host", e(hosts))
 
     # We can't use BUILD_SYS since that is something the rust snapshot knows
     # nothing about when trying to build some stage0 tools (like fabricate)
-    config.set("build", "build", e(d.getVar("SNAPSHOT_BUILD_SYS", True)))
-
-    # Explicitly disable all tools.
-    # This is done because some tools (e.g. rust-analyzer-proc-macro-srv)
-    # require the build.build target to be included in build.target which we
-    # don't want to do.
-    config.set("build", "tools", e([]))
+    config.set("build", "build", e(d.getVar("SNAPSHOT_BUILD_SYS")))
 
     # [install]
     config.add_section("install")
-    # ./x.py install doesn't have any notion of "destdir"
-    # but we can prepend ${D} to all the directories instead
-    config.set("install", "prefix",     e(d.getVar("D", True) + d.getVar("prefix", True)))
-    config.set("install", "bindir",     e(d.getVar("D", True) + d.getVar("bindir", True)))
-    config.set("install", "libdir",     e(d.getVar("D", True) + d.getVar("libdir", True)))
-    config.set("install", "datadir",    e(d.getVar("D", True) + d.getVar("datadir", True)))
-    config.set("install", "mandir",     e(d.getVar("D", True) + d.getVar("mandir", True)))
-    config.set("install", "sysconfdir", e(d.getVar("D", True) + d.getVar("sysconfdir", True)))
+    # Rust 1.92.0+ supports DESTDIR environment variable
+    # Set paths without ${D} prefix - DESTDIR will be prepended automatically
+    config.set("install", "prefix",  e(d.getVar("prefix")))
+    config.set("install", "bindir",  e(d.getVar("bindir")))
+    config.set("install", "libdir",  e(d.getVar("libdir")))
+    config.set("install", "datadir", e(d.getVar("datadir")))
+    config.set("install", "mandir",  e(d.getVar("mandir")))
 
     with open("config.toml", "w") as f:
-        if bb.utils.vercmp_string_op(d.getVar("RUST_VERSION", True), "1.80.0", "<"):
-            f.write('changelog-seen = 2\n\n')
-        elif bb.utils.vercmp_string_op(d.getVar("RUST_VERSION", True), "1.82.0", "<="):
-            f.write('change-id = 115898\n\n')
         config.write(f)
 
     # set up ${WORKDIR}/cargo_home
@@ -177,6 +165,9 @@ rust_runx () {
     unset CPPFLAGS
 
     oe_cargo_fix_env
+
+    # Rust 1.92.0+ checks DESTDIR environment variable for install write permission
+    export DESTDIR="${D}"
 
     python3 src/bootstrap/bootstrap.py ${@oe.utils.parallel_make_argument(d, '-j %d')} "$@" --verbose
 }

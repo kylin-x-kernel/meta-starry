@@ -20,13 +20,10 @@ inherit cargo pkgconfig
 
 do_cargo_setup_snapshot () {
 	${WORKDIR}/rust-snapshot-components/${CARGO_SNAPSHOT}/install.sh --prefix="${WORKDIR}/${CARGO_SNAPSHOT}" --disable-ldconfig
-	${WORKDIR}/rust-snapshot-components/${RUSTC_SNAPSHOT}/install.sh --prefix="${WORKDIR}/${RUSTC_SNAPSHOT}" --disable-ldconfig
-	
 	# Need to use uninative's loader if enabled/present since the library paths
 	# are used internally by rust and result in symbol mismatches if we don't
 	if [ ! -z "${UNINATIVE_LOADER}" -a -e "${UNINATIVE_LOADER}" ]; then
 		patchelf-uninative ${WORKDIR}/${CARGO_SNAPSHOT}/bin/cargo --set-interpreter ${UNINATIVE_LOADER}
-		patchelf-uninative ${WORKDIR}/${RUSTC_SNAPSHOT}/bin/rustc --set-interpreter ${UNINATIVE_LOADER}
 	fi
 }
 
@@ -57,4 +54,3 @@ export LIBSSH2_SYS_USE_PKG_CONFIG = "1"
 # so we must use the locally set up snapshot to bootstrap the build.
 BASEDEPENDS:remove:class-native = "cargo-native"
 CARGO:class-native = "${WORKDIR}/${CARGO_SNAPSHOT}/bin/cargo"
-RUSTC:class-native = "${WORKDIR}/${RUSTC_SNAPSHOT}/bin/rustc"

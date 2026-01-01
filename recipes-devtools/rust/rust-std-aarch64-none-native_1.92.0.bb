@@ -1,45 +1,64 @@
-# Rust standard library for aarch64-unknown-none-softfloat (bare-metal)
-# Required for ArceOS/StarryOS bare-metal applications
+# Rust standard library for aarch64-unknown-none-softfloat (built from source)
+require rust-target.inc
+require rust-source_${PV}.inc
 
-SUMMARY = "Rust standard library for aarch64-unknown-none-softfloat"
-HOMEPAGE = "https://www.rust-lang.org"
-LICENSE = "MIT | Apache-2.0"
-SECTION = "devel"
+# Clear PROVIDES inherited from rust-target.inc (only rust_1.92.0.bb should provide virtual/rust-native)
+PROVIDES:class-native = ""
 
-LIC_FILES_CHKSUM = " \
-    file://LICENSE-MIT;md5=8a95ea02f2dd8c2953432d0ddd7cdd91 \
-    file://LICENSE-APACHE;md5=22a53954e4e0ec258dfce4391e905dac \
-"
-
-PV = "1.92.0"
-
-SRC_URI = "https://static.rust-lang.org/dist/rust-std-${PV}-aarch64-unknown-none-softfloat.tar.xz"
-SRC_URI[sha256sum] = "0dc46fafaaa36f53eec49e14a69e1d6d9ac6f0b9624a01081ad311d8139a2be0"
-
-S = "${WORKDIR}/rust-std-${PV}-aarch64-unknown-none-softfloat"
-
-# Prevent Yocto from stripping or modifying prebuilt binaries
-INHIBIT_PACKAGE_STRIP = "1"
-INHIBIT_SYSROOT_STRIP = "1"
-INHIBIT_PACKAGE_DEBUG_SPLIT = "1"
-INSANE_SKIP:${PN} = "already-stripped ldflags"
-
-# This is a native-only package
 inherit native
+DEPENDS = "rust-native"
 
-# Must be installed after rustc-bin-native
-DEPENDS = "rustc-bin-native"
+# Remove snapshot task (rust-std doesn't need bootstrap, it depends on rust-native)
+deltask do_rust_setup_snapshot
 
-do_install() {
-    # Install to the same location as rustc-bin
-    ./install.sh --prefix="${D}${prefix}" --disable-ldconfig
+INSANE_SKIP:${PN}:class-native = "already-stripped"
+
+# Override do_configure to use rust-native instead of snapshot
+python do_configure() {
+    import json
+    try:
+        import configparser
+    except ImportError:
+        import ConfigParser as configparser
+
+    e = lambda s: json.dumps(s)
+    config = configparser.RawConfigParser()
+
+    # [build]
+    config.add_section("build")
+    config.set("build", "submodules", e(False))
+    config.set("build", "docs", e(False))
     
-    # Remove files that conflict with rustc-bin-native and rust-std-native
-    rm -f ${D}${prefix}/lib/rustlib/uninstall.sh
-    rm -f ${D}${prefix}/lib/rustlib/install.log
-    rm -f ${D}${prefix}/lib/rustlib/rust-installer-version
-    rm -f ${D}${prefix}/lib/rustlib/components
-    rm -f ${D}${prefix}/lib/rustlib/manifest-rust-std-*
+    # Use rustc from rust-native (not snapshot)
+    config.set("build", "rustc", e(d.expand("${STAGING_BINDIR_NATIVE}/rustc")))
+    config.set("build", "cargo", e(d.expand("${STAGING_BINDIR_NATIVE}/cargo")))
+    
+    config.set("build", "vendor", e(True))
+    config.set("build", "build", e(d.getVar("SNAPSHOT_BUILD_SYS")))
+
+    # [install]
+    config.add_section("install")
+    config.set("install", "prefix",  e(d.getVar("prefix")))
+    config.set("install", "libdir",  e(d.getVar("libdir")))
+
+    with open("config.toml", "w") as f:
+        config.write(f)
+
+    bb.build.exec_func("setup_cargo_environment", d)
 }
 
-BBCLASSEXTEND = ""
+# Compile std library from source for aarch64-unknown-none-softfloat target
+do_compile() {
+    rust_runx build library/std --target aarch64-unknown-none-softfloat
+}
+
+do_install() {
+    rust_runx install library/std --target aarch64-unknown-none-softfloat
+}
+
+python () {
+    pn = d.getVar('PN')
+
+    if not pn.endswith("-native"):
+        raise bb.parse.SkipRecipe("Rust recipe doesn't work for target builds at this time. Fixes welcome.")
+}

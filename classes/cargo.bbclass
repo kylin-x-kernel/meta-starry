@@ -41,11 +41,14 @@ CARGO_NO_DEFAULT_FEATURES ??= ""
 CARGO_ALL_FEATURES ??= ""
 EXTRA_CARGO_FLAGS ??= ""
 
+# Cargo build target
+CARGO_BUILD_TARGET ??= "${RUST_HOST_SYS}"
+
 RUSTFLAGS ??= ""
 BUILD_MODE = "${@['--release', ''][d.getVar('DEBUG_BUILD') == '1']}"
 CARGO_BUILD_FLAGS = "\
     -v \
-    --target ${RUST_HOST_SYS} \
+    --target ${CARGO_BUILD_TARGET} \
     ${BUILD_MODE} \
     --manifest-path=${MANIFEST_PATH} \
     ${@oe.utils.conditional('CARGO_NO_DEFAULT_FEATURES', '1', '--no-default-features', '', d)} \
@@ -57,7 +60,7 @@ CARGO_BUILD_FLAGS = "\
 # This is based on the content of CARGO_BUILD_FLAGS and generally will need to
 # change if CARGO_BUILD_FLAGS changes.
 BUILD_DIR = "${@['release', 'debug'][d.getVar('DEBUG_BUILD') == '1']}"
-CARGO_TARGET_SUBDIR="${RUST_HOST_SYS}/${BUILD_DIR}"
+CARGO_TARGET_SUBDIR="${CARGO_BUILD_TARGET}/${BUILD_DIR}"
 oe_cargo_build () {
 	export RUSTFLAGS="${RUSTFLAGS}"
 	export RUST_TARGET_PATH="${RUST_TARGET_PATH}"

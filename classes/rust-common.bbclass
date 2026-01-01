@@ -7,7 +7,9 @@ FILES:${PN}-dbg += "${rustlibdir}/.debug"
 RUSTLIB = "-L ${STAGING_LIBDIR}/rust"
 RUST_DEBUG_REMAP = "--remap-path-prefix=${WORKDIR}=/usr/src/debug/${PN}/${EXTENDPE}${PV}-${PR}"
 RUSTFLAGS += "${RUSTLIB} ${RUST_DEBUG_REMAP}"
-RUSTLIB_DEP ?= "libstd-rs"
+# 使用预编译工具链，不需要构建 libstd-rs
+# 标准库已包含在 rustc-bin 和 rust-std-*-native 中
+RUSTLIB_DEP ?= ""
 export RUST_TARGET_PATH = "${STAGING_LIBDIR_NATIVE}/rustlib"
 RUST_PANIC_STRATEGY ?= "unwind"
 
@@ -141,7 +143,7 @@ create_wrapper () {
 
 	cat <<- EOF > "${file}"
 	#!/bin/sh
-	exec $@ "\$@"
+	exec "$@" "\$@"
 	EOF
 	chmod +x "${file}"
 }

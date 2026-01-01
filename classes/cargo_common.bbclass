@@ -88,6 +88,17 @@ cargo_common_do_configure () {
 		EOF
 	fi
 
+	# 如果 CARGO_BUILD_TARGET 不同于 HOST_SYS（例如裸机内核），也需要配置
+	# 对于 ArceOS 等裸机内核，CARGO_BUILD_TARGET 可能是 aarch64-unknown-none-softfloat
+	if [ -n "${CARGO_BUILD_TARGET}" ] && [ "${CARGO_BUILD_TARGET}" != "${RUST_HOST_SYS}" ] && [ "${CARGO_BUILD_TARGET}" != "${RUST_BUILD_SYS}" ]; then
+		cat <<- EOF >> ${CARGO_HOME}/config.toml
+
+		# CARGO_BUILD_TARGET (bare-metal or custom target)
+		[target.${CARGO_BUILD_TARGET}]
+		linker = "${CARGO_RUST_TARGET_CCLD}"
+		EOF
+	fi
+
 	# Put build output in build directory preferred by bitbake instead of
 	# inside source directory unless they are the same
 	if [ "${B}" != "${S}" ]; then
@@ -128,6 +139,10 @@ oe_cargo_fix_env () {
 	export HOST_CFLAGS="${BUILD_CFLAGS}"
 	export HOST_CXXFLAGS="${BUILD_CXXFLAGS}"
 	export HOST_AR="${BUILD_AR}"
+	
+	# 启用 RUSTC_BOOTSTRAP 允许 stable 编译器使用 unstable features
+	# 这对于某些依赖 nightly-only features 的 crate 是必需的
+	export RUSTC_BOOTSTRAP=1
 }
 
 EXTRA_OECARGO_PATHS ??= ""

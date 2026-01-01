@@ -9,7 +9,11 @@
 
 python () {
         import sys
-        layerdir = d.getVar("RUSTLAYER")
+        # 使用 meta-starry layer 的路径，而不是依赖未定义的 RUSTLAYER
+        layerdir = d.getVar("LAYERDIR_meta-starry")
+        if not layerdir:
+            # 回退：从当前 bbclass 文件路径推导 layer 目录
+            layerdir = os.path.dirname(d.getVar("FILE")).replace("/classes", "")
         sys.path.insert(0, layerdir + "/lib")
         import crate
         bb.fetch2.methods.append( crate.Crate() )
