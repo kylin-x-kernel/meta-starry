@@ -9,7 +9,8 @@ RUST_DEBUG_REMAP = "--remap-path-prefix=${WORKDIR}=/usr/src/debug/${PN}/${EXTEND
 RUSTFLAGS += "${RUSTLIB} ${RUST_DEBUG_REMAP}"
 # 使用预编译工具链，不需要构建 libstd-rs
 # 标准库已包含在 rustc-bin 和 rust-std-*-native 中
-RUSTLIB_DEP ?= ""
+# 使用强赋值覆盖 poky 的默认设置
+RUSTLIB_DEP = ""
 export RUST_TARGET_PATH = "${STAGING_LIBDIR_NATIVE}/rustlib"
 RUST_PANIC_STRATEGY ?= "unwind"
 

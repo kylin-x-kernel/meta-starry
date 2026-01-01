@@ -5,44 +5,83 @@ require rust-source_${PV}.inc
 # Clear PROVIDES inherited from rust-target.inc (only rust_1.92.0.bb should provide virtual/rust-native)
 PROVIDES:class-native = ""
 
-# LICENSE is in rustc root, S points to library/std
+# LICENSE is in rustc root
 LICENSE = "MIT | Apache-2.0"
-LIC_FILES_CHKSUM = "file://../../COPYRIGHT;md5=11a3899825f4376896e438c8c753f8dc"
+LIC_FILES_CHKSUM = "file://${RUSTSRC}/COPYRIGHT;md5=11a3899825f4376896e438c8c753f8dc"
 
 inherit native
 DEPENDS = "rust-native"
 
-# libstd moved from src/libstd to library/std in 1.47+
-# For bare-metal (target_os="none"), build core+alloc, not std
-S = "${RUSTSRC}/library/core"
+S = "${RUSTSRC}/library"
 
 # Remove snapshot task
 deltask do_rust_setup_snapshot
 
 INSANE_SKIP:${PN}:class-native = "already-stripped"
 
-# Use rust-native's tools directly (avoid cargo-native conflict)
-export CARGO = "${COMPONENTS_DIR}/${BUILD_ARCH}/rust-native/usr/bin/cargo"
+# Use rust-native's tools directly
 export RUSTC = "${COMPONENTS_DIR}/${BUILD_ARCH}/rust-native/usr/bin/rustc"
+TARGET_TRIPLE = "aarch64-unknown-none-softfloat"
 
 do_compile() {
     export PATH="${COMPONENTS_DIR}/${BUILD_ARCH}/rust-native/usr/bin:$PATH"
     export RUSTC_BOOTSTRAP="1"
-    export CARGO_TARGET_DIR="${B}"
     
-    # Build core (cargo will auto-build alloc and compiler_builtins as dependencies)
-    cd ${RUSTSRC}/library/core
-    ${CARGO} build --target aarch64-unknown-none-softfloat --release
+    cd ${S}
+    BUILD_DIR="${B}/build"
+    mkdir -p ${BUILD_DIR}
+    
+    # Build order: core -> compiler_builtins -> alloc
+    # core uses #![no_core] so has no dependencies
+    # compiler_builtins uses #![no_std] so needs core
+    # alloc uses #![no_std] and needs core + compiler_builtins
+    
+    # Step 1: Build core (uses #![no_core], no dependencies)
+    bbnote "Building core..."
+    ${RUSTC} \
+        --crate-name core \
+        --crate-type rlib \
+        --edition 2024 \
+        --target ${TARGET_TRIPLE} \
+        --out-dir ${BUILD_DIR} \
+        -O \
+        ${S}/core/src/lib.rs
+    
+    # Step 2: Build compiler_builtins (uses #![no_std], needs core)
+    bbnote "Building compiler_builtins..."
+    ${RUSTC} \
+        --crate-name compiler_builtins \
+        --crate-type rlib \
+        --edition 2024 \
+        --target ${TARGET_TRIPLE} \
+        --out-dir ${BUILD_DIR} \
+        -O \
+        -L ${BUILD_DIR} \
+        --extern core=${BUILD_DIR}/libcore.rlib \
+        --cfg 'feature="compiler-builtins"' \
+        --cfg 'feature="mem"' \
+        ${RUSTSRC}/library/compiler-builtins/compiler-builtins/src/lib.rs
+    
+    # Step 3: Build alloc (uses #![no_std], needs core + compiler_builtins)
+    bbnote "Building alloc..."
+    ${RUSTC} \
+        --crate-name alloc \
+        --crate-type rlib \
+        --edition 2024 \
+        --target ${TARGET_TRIPLE} \
+        --out-dir ${BUILD_DIR} \
+        -O \
+        -L ${BUILD_DIR} \
+        --extern core=${BUILD_DIR}/libcore.rlib \
+        --extern compiler_builtins=${BUILD_DIR}/libcompiler_builtins.rlib \
+        ${S}/alloc/src/lib.rs
 }
 
-# Override install for bare-metal target
 do_install() {
-    install -d ${D}${prefix}/lib/rustlib/aarch64-unknown-none-softfloat/lib
+    install -d ${D}${prefix}/lib/rustlib/${TARGET_TRIPLE}/lib
     
-    # All libraries built when compiling core (cargo auto-builds dependencies)
-    # core, alloc, compiler_builtins .rlib files are all in core's output
-    cp ${RUSTSRC}/library/core/aarch64-unknown-none-softfloat/release/deps/*.rlib \
-       ${D}${prefix}/lib/rustlib/aarch64-unknown-none-softfloat/lib/
+    # Copy all built .rlib files
+    cp ${B}/build/*.rlib ${D}${prefix}/lib/rustlib/${TARGET_TRIPLE}/lib/
 }
 
 python () {

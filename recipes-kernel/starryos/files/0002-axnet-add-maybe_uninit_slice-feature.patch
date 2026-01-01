@@ -1,0 +1,10 @@
+--- a/arceos/modules/axnet/src/lib.rs
++++ b/arceos/modules/axnet/src/lib.rs
+@@ -12,6 +12,7 @@
+ //! [smoltcp]: https://github.com/smoltcp-rs/smoltcp
+ 
+ #![no_std]
++#![feature(maybe_uninit_slice)]
+ 
+ #[macro_use]
+ extern crate log;

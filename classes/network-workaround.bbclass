@@ -1,15 +1,13 @@
 # Workaround for user namespace permission issues
-# Add network flag to all tasks to prevent BitBake from calling disable_network()
+# Globally disable network isolation
 
 python () {
-    # For all recipes (native and target), add network flag to common tasks
-    # 包括 Rust/Cargo 工具链特有的任务
-    for task in ['do_fetch', 'do_unpack', 'do_patch', 'do_prepare_recipe_sysroot', 
-                 'do_configure', 'do_compile', 'do_install', 'do_populate_sysroot',
-                 'do_clean', 'do_cleanall', 'do_cleansstate', 'do_preconfigure',
-                 'do_kernel_configme', 'do_kernel_configcheck', 'do_devshell',
-                 'do_generate_toolchain_file', 'do_rust_gen_targets', 
-                 'do_rust_setup_snapshot', 'do_cargo_setup_snapshot',
-                 'do_rust_create_wrappers']:
+    # 方法1: 为所有任务添加network标志
+    # 获取所有任务
+    tasks = [e for e in d.keys() if e.startswith('do_')]
+    for task in tasks:
         d.setVarFlag(task, 'network', '1')
 }
+
+# 方法2: 完全禁用网络隔离检查（备用）
+BB_TASK_IONICE_LEVEL = ""

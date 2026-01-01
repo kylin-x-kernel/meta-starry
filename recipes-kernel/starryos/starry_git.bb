@@ -17,7 +17,8 @@ SRC_URI = "git://github.com/kylin-x-kernel/StarryOS.git;protocol=https;branch=ma
            git://github.com/kylin-x-kernel/axplat_crates.git;protocol=https;branch=dev;name=axplat;destsuffix=git/local_crates/axplat_crates \
            git://github.com/kylin-x-kernel/axplat-aarch64-crosvm-virt.git;protocol=https;branch=main;name=crosvm;destsuffix=git/local_crates/axplat-aarch64-crosvm-virt \
            git://github.com/kylin-x-kernel/fdtree-rs.git;protocol=https;branch=main;name=fdtree;destsuffix=git/local_crates/fdtree-rs \
-           git://github.com/kylin-x-kernel/arm-gic.git;protocol=https;branch=main;name=armgic;destsuffix=git/local_crates/arm-gic"
+           git://github.com/kylin-x-kernel/arm-gic.git;protocol=https;branch=main;name=armgic;destsuffix=git/local_crates/arm-gic \
+           "
 
 # 使用固定的 commit hash（避免 AUTOREV 在解析时需要网络）
 # 更新时需要手动修改这些 hash
@@ -32,25 +33,18 @@ SRCREV_FORMAT = "starry_arceos"
 
 S = "${WORKDIR}/git"
 
-# 允许网络访问下载依赖
-do_configure[network] = "1"
-do_compile[network] = "1"
-
 # ==================== 平台配置 ====================
 COMPATIBLE_MACHINE = "(aarch64-qemu-virt|riscv64-qemu-virt|loongarch64-qemu-virt|x86_64-qemu-q35)"
 
-# ArceOS 配置（从 machine 继承 ARCEOS_PLAT_PACKAGE 和 RUST_TARGET）
-ARCEOS_SMP = "4"
-ARCEOS_LOG = "warn"
-
-# Cargo features（对应 StarryOS 的 features）
-CARGO_FEATURES = "qemu"
+# ArceOS 配置继承自机器配置文件
+# ARCEOS_SMP, ARCEOS_LOG, CARGO_FEATURES 使用机器默认值
+# 如需覆盖，可在此设置：
+# ARCEOS_SMP = "8"
+# CARGO_FEATURES = "qemu driver-ixgbe"
 
 # ==================== 构建配置 ====================
-# arceos.bbclass 已提供 do_configure，这里只需添加 StarryOS 特定的 patch 配置
+# Cargo.toml patch: 替换 git 依赖为本地路径
 do_configure:prepend() {
-    # 添加 [patch] 配置，将 git 依赖替换为本地路径
-    # 避免 workspace 冲突，只 patch 简单的依赖
     if ! grep -q "# BitBake patch configuration" ${S}/Cargo.toml; then
         cat >> ${S}/Cargo.toml << 'EOF'
 
@@ -61,56 +55,17 @@ EOF
     fi
 }
 
-# arceos.bbclass 已提供默认 do_compile，StarryOS 直接使用即可
-# 如需定制，可以在这里覆盖
-    AR_FULLPATH=$(which ${AR_NAME})
-    
-    # 创建 ar wrapper
-    cat > ${WORKDIR}/musl-wrapper/${ARCEOS_ARCH}-linux-musl-ar << EOF
-#!/bin/sh
-exec "${AR_FULLPATH}" "\$@"
-EOF
-    chmod +x ${WORKDIR}/musl-wrapper/${ARCEOS_ARCH}-linux-musl-ar
-    
-    export PATH="${WORKDIR}/musl-wrapper:$PATH"
-    export ARCH="${ARCEOS_ARCH}"
-    
-    # 告诉 bindgen 使用正确的 sysroot（lwext4_rust 的 build.rs 需要）
-    export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${STAGING_DIR_TARGET} -I${STAGING_INCDIR}"
-    
-    # 设置 cargo 环境变量（包括 RUSTC_BOOTSTRAP, HOST_CC 等）
-    oe_cargo_fix_env
-    
-    bbnote "Building StarryOS for ${CARGO_BUILD_TARGET} with features: ${CARGO_FEATURES}"
-    bbnote "Using cross compiler: ${CC}"
-    
-    # 使用标准的 oe_cargo_build（cargo.bbclass 提供）
-    # CARGO_BUILD_TARGET 在 arceos.bbclass 中设置为 ${RUST_TARGET_TRIPLE}
-    # CARGO_FEATURES 在 recipe 中设置
-    oe_cargo_build
-    
-    # 检查编译产物
-    if [ ! -f "${S}/target/${CARGO_BUILD_TARGET}/release/starry" ]; then
-        bbfatal "Build failed: starry binary not found"
-    fi
-}
+# arceos.bbclass 已提供完整的 do_compile 实现（包括 lwext4_rust 工具链适配）
 
-do_install() {
-    install -d ${D}/boot
-    
-    # 1. 安装 ELF（带符号表，用于 GDB 调试）
-    install -m 0755 \
-        ${S}/target/${RUST_TARGET_TRIPLE}/release/starry \
-        ${D}/boot/starry.elf
-    
-    # 2. 生成裸机二进制镜像（QEMU + 真实硬件通用）
+# rust-kernel.bbclass 提供默认 do_install（自动查找 ${PN}.elf = starry.elf）
+# 这里扩展：生成裸机二进制镜像
+do_install:append() {
+    # rust-kernel.bbclass 已安装 starry.elf，这里生成 .bin
     rust-objcopy \
         --binary-architecture=${ARCEOS_ARCH} \
         ${D}/boot/starry.elf \
         --strip-all -O binary \
         ${D}/boot/starry.bin
-    
-    bbnote "Installed starry.elf and starry.bin to /boot"
 }
 
 do_deploy() {

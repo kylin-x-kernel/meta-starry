@@ -21,6 +21,11 @@
 # Rust toolchain: rustc + cargo + target std library
 DEPENDS:append = " rust-native"
 
+# Disable automatic "make clean" in base_do_configure
+# The ArceOS Makefile's "clean" target runs "cargo clean" which fails
+# because Yocto's HOST_SYS (x86_64-linux) is not a valid Rust target
+CLEANBROKEN = "1"
+
 # Dynamically add rust-std for target architecture
 python __anonymous() {
     arch = d.getVar('KERNEL_ARCH')
@@ -73,6 +78,43 @@ rust_kernel_setup_toolchain() {
     # Point to Rust sysroot
     export RUSTC_SYSROOT="${RUST_NATIVE}/usr"
     
+    # CRITICAL: Yocto's rust-native was built with host=x86_64-linux
+    # But x86_64-linux is not a standard Rust target.
+    # We need to create a target spec JSON file that maps x86_64-linux to x86_64-unknown-linux-gnu
+    local target_spec_dir="${WORKDIR}/rust-target-specs"
+    mkdir -p "${target_spec_dir}"
+    
+    if [ ! -f "${target_spec_dir}/x86_64-linux.json" ]; then
+        # Create x86_64-linux target spec based on x86_64-unknown-linux-gnu
+        echo '{' > "${target_spec_dir}/x86_64-linux.json"
+        echo '    "arch": "x86_64",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "cpu": "x86-64",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "crt-static-respected": true,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "dynamic-linking": true,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "env": "gnu",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "has-rpath": true,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "has-thread-local": true,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "linker-flavor": "gnu-cc",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "llvm-target": "x86_64-unknown-linux-gnu",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "max-atomic-width": 64,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "os": "linux",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "plt-by-default": false,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "position-independent-executables": true,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "pre-link-args": { "gnu-cc": ["-m64"] },' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "relro-level": "full",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "static-position-independent-executables": true,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "target-family": ["unix"],' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "target-mcount": "_mcount",' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "target-pointer-width": 64,' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '    "vendor": "unknown"' >> "${target_spec_dir}/x86_64-linux.json"
+        echo '}' >> "${target_spec_dir}/x86_64-linux.json"
+        bbnote "Created x86_64-linux target spec at ${target_spec_dir}/x86_64-linux.json"
+    fi
+    
+    # Tell rustc where to find custom target specs
+    export RUST_TARGET_PATH="${target_spec_dir}"
+    
     # Verify toolchain availability
     if [ ! -f "${RUST_NATIVE}/usr/bin/cargo" ]; then
         bbfatal "cargo not found in rust-native"
@@ -96,8 +138,8 @@ rust_kernel_setup_toolchain() {
         ln -sf "${std_src}" "${target_rustlib}"
     fi
     
-    # Verify std library
-    if [ ! -f "${target_rustlib}/lib/libcore-"*.rlib ]; then
+    # Verify std library (check both naming conventions: libcore.rlib and libcore-*.rlib)
+    if [ ! -f "${target_rustlib}/lib/libcore.rlib" ] && ! ls "${target_rustlib}/lib/libcore-"*.rlib >/dev/null 2>&1; then
         bbfatal "libcore not found in ${target_rustlib}/lib/"
     fi
     
@@ -119,6 +161,10 @@ rust_kernel_setup_cargo() {
 
 [target.x86_64-unknown-linux-gnu]
 # Build scripts run on host
+linker = "gcc"
+
+[target.x86_64-linux]
+# Yocto's rust-native uses x86_64-linux as host target
 linker = "gcc"
 
 [target.${RUST_TARGET}]
@@ -149,6 +195,19 @@ do_compile() {
     
     export CARGO_BUILD_TARGET="${RUST_TARGET}"
     export RUST_BACKTRACE=1
+    
+    # Ensure build scripts can find host tools (cc, gcc)
+    # Use system's native toolchain for build scripts (proc-macro crates)
+    # HOST_PREFIX may be empty for native builds
+    if [ -z "${BUILD_CC}" ]; then
+        export CC="gcc"
+        export CXX="g++"
+        export AR="ar"
+    else
+        export CC="${BUILD_CC}"
+        export CXX="${BUILD_CXX}"
+        export AR="${BUILD_AR}"
+    fi
     
     bbnote "Building Rust kernel for ${RUST_TARGET}"
     bbnote "Cargo manifest: ${S}/Cargo.toml"

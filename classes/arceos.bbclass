@@ -27,6 +27,9 @@ DEPENDS:append = " \
     cmake-native \
 "
 
+# Export CARGO_FEATURES so it's available in shell functions
+export CARGO_FEATURES
+
 # Set KERNEL_ARCH for rust-kernel.bbclass
 KERNEL_ARCH = "${ARCEOS_ARCH}"
 
@@ -144,18 +147,81 @@ do_compile() {
     export AX_CONFIG_PATH="${S}/.axconfig.toml"
     export RUST_BACKTRACE=1
     
-    # lwext4_rust needs musl toolchain to compile C code
-    # Create wrappers for build scripts
-    mkdir -p "${WORKDIR}/musl-wrapper"
-    if [ ! -e "${WORKDIR}/musl-wrapper/${TUNE_ARCH}-linux-musl-cc" ]; then
-        ln -sf "$(which gcc)" "${WORKDIR}/musl-wrapper/${TUNE_ARCH}-linux-musl-cc"
-        ln -sf "$(which g++)" "${WORKDIR}/musl-wrapper/${TUNE_ARCH}-linux-musl-c++"
-        ln -sf "$(which ar)" "${WORKDIR}/musl-wrapper/${TUNE_ARCH}-linux-musl-ar"
-        ln -sf "$(which as)" "${WORKDIR}/musl-wrapper/${TUNE_ARCH}-linux-musl-as"
-        bbnote "Created musl toolchain wrappers for lwext4_rust"
+    # ==================== lwext4_rust musl toolchain setup ====================
+    # lwext4_rust's build.rs expects aarch64-linux-musl-gcc toolchain
+    # We create wrapper scripts that:
+    # 1. Handle -print-sysroot to return our fake sysroot
+    # 2. Forward compilation to the real cross compiler with bare-metal flags
+    
+    MUSL_WRAPPER_DIR="${WORKDIR}/musl-wrapper"
+    MUSL_SYSROOT="${WORKDIR}/musl-sysroot"
+    
+    mkdir -p "${MUSL_WRAPPER_DIR}"
+    mkdir -p "${MUSL_SYSROOT}/include"
+    
+    # Create minimal sysroot with essential headers for lwext4
+    # Use self-contained headers from meta-starry (portable across hosts)
+    if [ ! -f "${MUSL_SYSROOT}/include/stdint.h" ]; then
+        bbnote "Creating minimal sysroot for lwext4_rust..."
+        # Copy portable C headers bundled with meta-starry
+        # LAYERDIR_meta-starry is set by bitbake
+        MUSL_HEADERS_SRC="${LAYERDIR_meta-starry}/files/musl-headers"
+        if [ -d "${MUSL_HEADERS_SRC}" ]; then
+            cp -r "${MUSL_HEADERS_SRC}"/* "${MUSL_SYSROOT}/include/"
+            bbnote "Copied musl headers from ${MUSL_HEADERS_SRC}"
+        else
+            bbfatal "musl-headers not found at ${MUSL_HEADERS_SRC}"
+        fi
     fi
-    export PATH="${WORKDIR}/musl-wrapper:$PATH"
+    
+    # Create gcc wrapper script
+    cat > "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-gcc" << 'EOFGCC'
+#!/bin/bash
+# Musl gcc wrapper for lwext4_rust build
+# Handles -print-sysroot and forwards other args to real compiler
+
+SYSROOT="__MUSL_SYSROOT__"
+REAL_CC="__REAL_CC__"
+
+for arg in "$@"; do
+    if [ "$arg" = "-print-sysroot" ]; then
+        echo "$SYSROOT"
+        exit 0
+    fi
+done
+
+# Forward to real compiler with bare-metal compatible flags
+# -ffreestanding: Don't assume standard library exists
+# -nostdinc: Don't search standard include paths
+# -isystem: Add our sysroot headers as system include path
+exec $REAL_CC -ffreestanding -nostdinc -isystem "${SYSROOT}/include" "$@"
+EOFGCC
+
+    # Substitute placeholders
+    sed -i "s|__MUSL_SYSROOT__|${MUSL_SYSROOT}|g" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-gcc"
+    sed -i "s|__REAL_CC__|${CC}|g" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-gcc"
+    chmod +x "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-gcc"
+    
+    # Create cc alias (lwext4 cmake uses -cc suffix)
+    ln -sf "${TUNE_ARCH}-linux-musl-gcc" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-cc"
+    
+    # Create other tool wrappers as simple symlinks
+    ln -sf "$(which ${AR})" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-ar" 2>/dev/null || \
+        ln -sf "$(which ar)" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-ar"
+    ln -sf "$(which ${AS})" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-as" 2>/dev/null || \
+        ln -sf "$(which as)" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-as"
+    ln -sf "$(which ${RANLIB})" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-ranlib" 2>/dev/null || \
+        ln -sf "$(which ranlib)" "${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-ranlib"
+    
+    bbnote "Created musl toolchain wrappers in ${MUSL_WRAPPER_DIR}"
+    bbnote "  gcc wrapper: ${MUSL_WRAPPER_DIR}/${TUNE_ARCH}-linux-musl-gcc"
+    bbnote "  sysroot: ${MUSL_SYSROOT}"
+    
+    export PATH="${MUSL_WRAPPER_DIR}:$PATH"
     export ARCH="${TUNE_ARCH}"
+    
+    # Allow stable Rust to use nightly features (needed for #![feature(...)])
+    export RUSTC_BOOTSTRAP=1
     
     # Export ArceOS features if specified
     if [ -n "${ARCEOS_FEATURES}" ]; then
@@ -166,9 +232,37 @@ do_compile() {
     bbnote "Building ArceOS kernel for ${RUST_TARGET}"
     bbnote "Cargo manifest: ${S}/Cargo.toml"
     
-    # Build using cargo
-    cargo build \
-        --manifest-path "${S}/Cargo.toml" \
+    # Set linker script path - this is generated during configure
+    # The linker script is created by axhal during the build based on .axconfig.toml
+    LD_SCRIPT="${S}/target/${RUST_TARGET}/release/linker_${ARCEOS_PLATFORM}.lds"
+    
+    # Set RUSTFLAGS for linking (matching arceos Makefile)
+    # -C link-arg=-T<script>: Use custom linker script
+    # -C link-arg=-no-pie: Disable position-independent executable
+    # -C link-arg=-znostart-stop-gc: Prevent garbage collection of start/stop symbols
+    export RUSTFLAGS="-C link-arg=-T${LD_SCRIPT} -C link-arg=-no-pie -C link-arg=-znostart-stop-gc"
+    
+    # Add DWARF debug info flags if enabled
+    if [ "${ARCEOS_DWARF}" = "y" ]; then
+        export RUSTFLAGS="${RUSTFLAGS} -C force-frame-pointers -C debuginfo=2 -C strip=none"
+    fi
+    
+    bbnote "RUSTFLAGS: ${RUSTFLAGS}"
+    
+    # Build using cargo -C to match make build behavior exactly
+    # This is critical - cargo -C behaves differently from --manifest-path
+    # The make build uses: cargo -C <project_root> build -Z unstable-options ...
+    # Using --manifest-path triggers different path resolution behavior
+    
+    # Build WITHOUT -Z build-std
+    # This uses the pre-compiled rust-std library from rust-std-*-none-native
+    # Using -Z build-std would recompile std from source and trigger
+    # unstable library feature checks (e.g., maybe_uninit_slice)
+    
+    bbnote "Running: cargo -C ${S} build -Z unstable-options --target ${RUST_TARGET} --release --features ${CARGO_FEATURES:-none}"
+    
+    cargo -C "${S}" build \
+        -Z unstable-options \
         --target "${RUST_TARGET}" \
         --release \
         ${CARGO_FEATURES:+--features "${CARGO_FEATURES}"} \

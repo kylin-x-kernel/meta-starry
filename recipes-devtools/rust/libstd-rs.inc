@@ -9,11 +9,17 @@ inherit cargo
 
 DEPENDS:append:libc-musl = " libunwind"
 
-
 # Embed bitcode in order to allow compiling both with and without LTO
 RUSTFLAGS += "-Cembed-bitcode=yes"
 # Needed so cargo can find libbacktrace
 RUSTFLAGS += "-L ${STAGING_LIBDIR} -C link-arg=-Wl,-soname,libstd.so"
+
+# Since Rust 1.85.0, HashMap::with_hasher is const-stable (#[rustc_const_stable]),
+# which requires hashbrown's with_hasher to have #[rustc_const_stable_indirect].
+# When building std with cargo (not bootstrap), we need this flag to make the
+# compiler recognize the indirect const stability attribute properly.
+# This is normally set by bootstrap via RUSTC_FORCE_UNSTABLE environment variable.
+RUSTFLAGS += "-Zforce-unstable-if-unmarked"
 
 S = "${RUSTSRC}/src/libstd"
 
