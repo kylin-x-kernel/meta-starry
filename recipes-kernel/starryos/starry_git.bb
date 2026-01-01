@@ -47,11 +47,10 @@ ARCEOS_LOG = "warn"
 CARGO_FEATURES = "qemu"
 
 # ==================== 构建配置 ====================
-# 添加 do_configure 来处理 Cargo 依赖
+# arceos.bbclass 已提供 do_configure，这里只需添加 StarryOS 特定的 patch 配置
 do_configure:prepend() {
     # 添加 [patch] 配置，将 git 依赖替换为本地路径
-    # 只 patch 简单的依赖，避免 workspace 冲突
-    # axplat_crates 是独立 workspace，让 Cargo 从网络下载
+    # 避免 workspace 冲突，只 patch 简单的依赖
     if ! grep -q "# BitBake patch configuration" ${S}/Cargo.toml; then
         cat >> ${S}/Cargo.toml << 'EOF'
 
@@ -62,42 +61,8 @@ EOF
     fi
 }
 
-# arceos.bbclass 已提供默认 do_compile，这里只需覆盖特殊逻辑
-do_compile() {
-    # 确保使用 Yocto 提供的 Rust 工具链，而不是系统的
-    # BitBake 会通过 recipe-sysroot-native 提供 rustc 和 cargo
-    export PATH="${RECIPE_SYSROOT_NATIVE}/usr/bin:${PATH}"
-    
-    # 诊断：检查使用的工具链
-    bbnote "Using rustc: $(which rustc)"
-    bbnote "Using cargo: $(which cargo)"
-    bbnote "Rustc version: $(rustc --version)"
-    bbnote "Rustc sysroot: $(rustc --print sysroot)"
-    
-    export RUST_TARGET="${RUST_TARGET_TRIPLE}"
-    export CARGO_BUILD_TARGET="${RUST_TARGET_TRIPLE}"
-    export AX_CONFIG_PATH="${S}/.axconfig.toml"
-    
-    # lwext4_rust 的 C 代码需要 aarch64-linux-musl-cc
-    # 创建 wrapper script（而不是符号链接），自动添加 sysroot 和 include 路径
-    mkdir -p ${WORKDIR}/musl-wrapper
-    
-    # 提取编译器名称并找到完整路径
-    CC_NAME=$(echo "${CC}" | awk '{print $1}')
-    CC_FULLPATH=$(which ${CC_NAME})
-    
-    # 创建 aarch64-linux-musl-cc wrapper
-    cat > ${WORKDIR}/musl-wrapper/${ARCEOS_ARCH}-linux-musl-cc << EOF
-#!/bin/sh
-exec "${CC_FULLPATH}" --sysroot=${STAGING_DIR_TARGET} -isystem ${STAGING_INCDIR} "\$@"
-EOF
-    chmod +x ${WORKDIR}/musl-wrapper/${ARCEOS_ARCH}-linux-musl-cc
-    
-    # 同时创建 aarch64-linux-musl-gcc 符号链接（lwext4 build.rs 需要）
-    ln -sf ${ARCEOS_ARCH}-linux-musl-cc ${WORKDIR}/musl-wrapper/${ARCEOS_ARCH}-linux-musl-gcc
-    
-    # 提取 ar 路径
-    AR_NAME=$(echo "${AR}" | awk '{print $1}')
+# arceos.bbclass 已提供默认 do_compile，StarryOS 直接使用即可
+# 如需定制，可以在这里覆盖
     AR_FULLPATH=$(which ${AR_NAME})
     
     # 创建 ar wrapper

@@ -1,5 +1,7 @@
 # ArceOS build system class
-# Provides common build logic for ArceOS-based kernels
+# Provides ArceOS-specific build logic (platform config, features, etc.)
+#
+# Inherits rust-kernel.bbclass for common Rust bare-metal kernel build
 #
 # Usage:
 #   inherit arceos
@@ -15,73 +17,27 @@
 #   ARCEOS_LOG - Log level (default: warn)
 #   ARCEOS_PLAT_CONFIG - Path to pre-generated platform config file
 
-# ArceOS 基于 Cargo 构建系统
-# cargo.bbclass 会自动 inherit cargo_common，提供环境变量设置（包括 RUSTC_BOOTSTRAP）
-inherit cargo
+# Inherit common Rust kernel build infrastructure
+inherit rust-kernel
 
-# 裸机内核不需要 cargo.bbclass 默认添加的 libc 版本 Rust 工具链
-# cargo.bbclass 会添加 virtual/${TARGET_PREFIX}rust 和 ${RUSTLIB_DEP}
-# RUSTLIB_DEP 在 rust-common.bbclass 中已设为空
-# virtual/${TARGET_PREFIX}rust 会解析为 Poky 的 rust-cross，进而依赖 libstd-rs
-# 通过设置 INHIBIT_DEFAULT_RUST_DEPS 阻止自动添加 Rust 工具链依赖
-INHIBIT_DEFAULT_RUST_DEPS = "1"
-
-# Architecture and platform configuration
-# These can be set in machine/*.conf files or recipes
-# Using ?= (weak assignment) allows machine config to override defaults
-ARCEOS_ARCH ?= ""
-ARCEOS_PLAT_PACKAGE ?= ""
-RUST_TARGET ?= ""
-
-# Rust target triple
-RUST_TARGET_TRIPLE = "${RUST_TARGET}"
-
-# Tool dependencies for ArceOS bare-metal build
+# ArceOS-specific tool dependencies
 DEPENDS:append = " \
     axconfig-gen-native \
     cargo-binutils-native \
     cmake-native \
 "
 
-# Bare-metal stdlib: 根据 ARCEOS_ARCH 动态选择
-# 将来支持 Linux userspace 时，这里会根据 TCLIBC 切换到 libstd-rs
-python __anonymous() {
-    arch = d.getVar('ARCEOS_ARCH')
-    if not arch:
-        return
-    
-    # Bare-metal 目标的 rust-std
-    # 格式: rust-std-{arch}-none-native
-    arch_map = {
-        'aarch64': 'rust-std-aarch64-none-native',
-        'riscv64': 'rust-std-riscv64-none-native',
-        'loongarch64': 'rust-std-loongarch64-none-native',
-        'x86_64': 'rust-std-x86_64-none-native',
-    }
-    
-    rust_std = arch_map.get(arch, 'rust-std-aarch64-none-native')
-    d.appendVar('DEPENDS', f' {rust_std}')
-}
+# Set KERNEL_ARCH for rust-kernel.bbclass
+KERNEL_ARCH = "${ARCEOS_ARCH}"
 
-# We need Rust toolchain but not the standard cross-compiler
-DEPENDS:append = " cargo-bin-native rustc-bin-native"
+# Architecture and platform configuration
+ARCEOS_ARCH ?= ""
+ARCEOS_PLAT_PACKAGE ?= ""
 
-# Bare-metal kernel doesn't need packaging - completely disable packaging tasks
-PACKAGES = ""
-RDEPENDS:${PN} = ""
-ALLOW_EMPTY:${PN} = "1"
-
-deltask package
-deltask package_write_rpm
-deltask package_write_ipk
-deltask package_write_deb
-deltask packagedata
-deltask package_qa
-
-# Export environment variables for build
+# Export environment variables for ArceOS build
 export ARCEOS_ARCH
-export RUST_TARGET_TRIPLE
-export CARGO_BUILD_TARGET = "${RUST_TARGET_TRIPLE}"
+
+# ==================== ArceOS Configuration ====================
 
 def arceos_arch_map(d):
     """Map Yocto TARGET_ARCH to ArceOS ARCH"""
@@ -172,50 +128,24 @@ arceos_generate_config() {
     bbfatal "Unable to generate config: not a StarryOS project and no pre-defined config provided"
 }
 
-# Setup cargo build environment
-arceos_setup_cargo() {
-    mkdir -p "${S}/.cargo"
-    
-    # Create base cargo config for bare-metal target
-    # NOTE: Do NOT set [build] target here - it would force build scripts 
-    # to compile for the target platform instead of the host.
-    # We specify --target on the command line instead.
-    cat > "${S}/.cargo/config.toml" <<EOF
-[target.x86_64-unknown-linux-gnu]
-# Build scripts use host platform
-linker = "gcc"
+# ==================== Build Tasks ====================
 
-[target.${RUST_TARGET_TRIPLE}]
-# ArceOS uses custom linker script, no external linker needed
-rustflags = [
-    "-C", "link-arg=-nostartfiles",
-    "-C", "link-arg=-no-pie",
-]
-
-# Git dependency path redirects will be appended by recipe
-# [patch.crates-io]
-# [patch."https://github.com/..."]
-EOF
-
-    bbnote "Created .cargo/config.toml for target ${RUST_TARGET_TRIPLE}"
-}
-
-# Hook into do_configure - run AFTER make clean
+# Hook into rust-kernel.bbclass configure task to generate ArceOS config  
 do_configure:append() {
     arceos_generate_config
-    arceos_setup_cargo
 }
 
-# Default compile task for ArceOS/StarryOS projects
-# Recipes can override this by defining their own do_compile
+# Override rust-kernel.bbclass compile to add ArceOS-specific logic
 do_compile() {
-    export RUSTC_BOOTSTRAP=1
-    export CARGO_BUILD_TARGET="${RUST_TARGET_TRIPLE}"
+    # Call rust-kernel setup
+    rust_kernel_setup_toolchain
+    
+    export CARGO_BUILD_TARGET="${RUST_TARGET}"
     export AX_CONFIG_PATH="${S}/.axconfig.toml"
     export RUST_BACKTRACE=1
     
-    # lwext4_rust 需要 musl 工具链来编译 C 代码
-    # 创建符号链接，使用系统的 gcc（裸机编译，不需要 musl 库）
+    # lwext4_rust needs musl toolchain to compile C code
+    # Create wrappers for build scripts
     mkdir -p "${WORKDIR}/musl-wrapper"
     if [ ! -e "${WORKDIR}/musl-wrapper/${TUNE_ARCH}-linux-musl-cc" ]; then
         ln -sf "$(which gcc)" "${WORKDIR}/musl-wrapper/${TUNE_ARCH}-linux-musl-cc"
@@ -233,32 +163,14 @@ do_compile() {
         bbnote "ArceOS features: ${ARCEOS_FEATURES}"
     fi
     
-    bbnote "Building with cargo for target: ${RUST_TARGET_TRIPLE}"
-    bbnote "Manifest: ${S}/Cargo.toml"
+    bbnote "Building ArceOS kernel for ${RUST_TARGET}"
+    bbnote "Cargo manifest: ${S}/Cargo.toml"
     
-    # Build using cargo with explicit target
+    # Build using cargo
     cargo build \
         --manifest-path "${S}/Cargo.toml" \
-        --target "${RUST_TARGET_TRIPLE}" \
+        --target "${RUST_TARGET}" \
         --release \
         ${CARGO_FEATURES:+--features "${CARGO_FEATURES}"} \
         ${EXTRA_CARGO_FLAGS}
-}
-
-# Default install task for bare-metal kernels
-# Recipes should override this to customize installation
-do_install() {
-    bbwarn "Using default arceos.bbclass do_install - recipes should override this"
-    
-    install -d ${D}/boot
-    
-    # Try to find the built kernel binary
-    local kernel_bin="${B}/target/${RUST_TARGET_TRIPLE}/release/${PN}"
-    
-    if [ -f "${kernel_bin}" ]; then
-        install -m 0755 "${kernel_bin}" "${D}/boot/${PN}.elf"
-        bbnote "Installed ${PN}.elf to /boot"
-    else
-        bbwarn "Kernel binary not found at ${kernel_bin}"
-    fi
 }

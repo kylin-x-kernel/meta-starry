@@ -97,6 +97,32 @@ bitbake starry
 
 **meta-starry 当前专注于裸机操作系统内核的构建，暂时不包含用户态应用程序。**
 
+### Rust 工具链架构
+
+本项目提供**完全从源码构建**的 Rust 工具链，包括：
+- **rust-native**: rustc 1.92.0 编译器 + cargo 包管理器（源码构建）
+- **rust-std-{arch}-none-native**: 裸机目标标准库（core + alloc + compiler_builtins）
+  - 支持架构：aarch64, riscv64, loongarch64, x86_64
+  - 构建方式：直接编译 library/core，自动包含 alloc 和 compiler_builtins
+
+### 构建系统类（bbclass）
+
+**rust-kernel.bbclass** - 通用 Rust 裸机内核构建基础类
+- 自动配置 Rust 工具链（rust-native + rust-std）
+- 自动链接 std 库到 sysroot
+- Cargo 环境设置
+- 默认 do_configure/do_compile/do_install 任务
+
+**arceos.bbclass** - ArceOS 特定构建类（继承 rust-kernel.bbclass）
+- ArceOS 平台配置生成（axconfig-gen）
+- StarryOS 支持（自动检测 arceos submodule）
+- lwext4_rust 的 C 代码编译支持
+- ArceOS features 和环境变量管理
+
+详细说明：
+- [Rust 工具链开发指南](recipes-devtools/rust/README-rust.md)
+- [快速参考：类与工具链](docs/QUICK-REFERENCE.md)
+
 ### 构建产物
 *   **StarryOS 内核**：基于 Rust 的裸机操作系统内核（`#![no_std]`）
     *   目标架构：aarch64, riscv64, loongarch64, x86_64

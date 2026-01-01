@@ -2,22 +2,30 @@
 
 ## meta-starry 中的 Rust 支持
 
-meta-starry 提供了完整的 Rust 1.92.0 预编译工具链，支持裸机内核（如 StarryOS）和未来可能的用户态应用开发。
+meta-starry 提供了**完全从源码构建**的 Rust 1.92.0 工具链，支持裸机内核（如 StarryOS）和未来可能的用户态应用开发。
 
 ### 当前实现状态
 
-**✅ 已支持：**
-- 预编译 Rust 工具链（`rustc-bin`, `cargo-bin`）用于构建主机
-- 裸机目标标准库（`rust-std-*-none-native`）用于内核开发
-- 基于 Cargo 的内核构建流程（通过 `cargo.bbclass`）
+**✅ 已支持（源码构建）：**
+- **rust-native**: rustc 1.92.0 + cargo（从 rustc-1.92.0-src.tar.xz 构建）
+  - 包含 11 个工具：rustc, cargo, rustdoc, clippy, rustfmt, rust-analyzer 等
+  - 使用 rust-llvm-native (LLVM 21.1.5) 作为后端
+- **rust-std-{arch}-none-native**: 裸机标准库（从源码编译 library/core）
+  - libcore, liballoc, libcompiler_builtins
+  - 支持架构：aarch64, riscv64, loongarch64, x86_64
+  - 目标规范：`{arch}-unknown-none-softfloat`
+- **rust-kernel.bbclass**: 通用裸机内核构建基础类
+- **arceos.bbclass**: ArceOS 特定构建类（继承 rust-kernel.bbclass）
 - 多架构支持：aarch64, riscv64, loongarch64, x86_64
 
 **⚠️ 当前未使用（为未来扩展保留）：**
 - Linux 用户态 Rust 程序的标准库构建（`libstd-rs`）
-- 交叉编译到 Linux 目标的 Rust 应用
+- 交叉编译到 Linux 目标的 Rust 应用（`rust-cross`）
 
-**🔬 未经测试：**
-- 在目标设备上直接运行 `cargo`（通常不需要）
+**📝 构建细节：**
+- rust-std 使用 `RUSTC_BOOTSTRAP=1` 允许 stable 工具链使用 nightly 特性
+- 自动链接到 rust-native 的 sysroot（通过 rust-kernel.bbclass）
+- 编译时间：~8 秒（core + alloc + compiler_builtins）
 
 ### 架构限制
 
