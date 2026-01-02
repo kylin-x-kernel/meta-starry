@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""
+setup-layers: Setup the layers for meta-starry
+
+This script sets up the Yocto layers required for building StarryOS.
+It clones the required repositories and configures the build environment.
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def run_cmd(cmd, cwd=None):
+    """Run a command and return True if successful"""
+    try:
+        result = subprocess.run(cmd, shell=True, cwd=cwd, check=True,
+                              capture_output=True, text=True)
+        return True, result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed: {cmd}")
+        print(f"Error: {e.stderr}")
+        return False, e.stderr
+
+
+def clone_repo(url, path, branch=None):
+    """Clone a git repository"""
+    if os.path.exists(path):
+        print(f"Directory {path} already exists, skipping clone")
+        return True
+
+    cmd = f"git clone {url} {path}"
+    if branch:
+        cmd += f" --branch {branch}"
+
+    print(f"Cloning {url} to {path}...")
+    success, output = run_cmd(cmd)
+    if not success:
+        print(f"Failed to clone {url}")
+        return False
+    return True
+
+
+def main():
+    script_dir = Path(__file__).parent
+    setup_json = script_dir / "setup-layers.json"
+
+    if not setup_json.exists():
+        print(f"Error: {setup_json} not found")
+        sys.exit(1)
+
+    with open(setup_json, 'r') as f:
+        config = json.load(f)
+
+    print("Setting up StarryOS Yocto layers...")
+    print("=" * 50)
+
+    # Clone sources
+    sources = config.get("sources", {})
+    for name, source_config in sources.items():
+        if name == "meta-starry":
+            # Skip cloning meta-starry itself (we're running from it)
+            continue
+
+        url = source_config["url"]
+        branch = source_config.get("branch", "master")
+
+        # Clone to parent directory of meta-starry
+        clone_path = script_dir.parent / name
+
+        if not clone_repo(url, clone_path, branch):
+            print(f"Failed to setup {name}")
+            sys.exit(1)
+
+    print("\nAll repositories cloned successfully!")
+    print("\nNext steps:")
+    print("1. Initialize build environment:")
+    print("   cd meta-starry")
+    print("   source ../poky/oe-init-build-env ../build")
+    print("")
+    print("2. Build StarryOS:")
+    print("   bitbake starry")
+    print("")
+    print("3. For more information, see README.md")
+
+
+if __name__ == "__main__":
+    main()

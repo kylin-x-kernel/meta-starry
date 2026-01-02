@@ -1,0 +1,70 @@
+#
+# StarryOS Bare-Metal Kernel Build Configuration
+
+#
+
+# ==================== Machine Selection ====================
+# 目标平台选择
+MACHINE ??= "aarch64-qemu-virt"
+
+# ==================== Build System Configuration ====================
+# 发行版配置
+DISTRO ?= "starryos"
+
+# 下载目录
+#DL_DIR ?= "${TOPDIR}/downloads"
+
+# 共享状态缓存目录
+#SSTATE_DIR ?= "${TOPDIR}/sstate-cache"
+
+# 临时构建目录
+#TMPDIR = "${TOPDIR}/tmp"
+
+# ==================== Bare-Metal Specific Settings ====================
+# C 库设置为 baremetal（由 machine 配置文件设置，这里不重复）
+# TCLIBC 已在 meta-starry/conf/machine/*.conf 中设置
+
+
+
+# 禁用 BitBake 网络隔离
+BB_NO_NETWORK = "0"
+
+# 完全禁用网络隔离功能（避免 Operation not permitted 错误）
+BB_TASK_NETWORK = "1"
+
+# ==================== Package Management ====================
+# 裸机内核不需要打包系统
+# PACKAGE_CLASSES 已在 distro 配置中设置
+# INHIBIT_PACKAGE_INSTALL 已在 distro 配置中设置
+
+# ==================== Build Performance ====================
+# 构建统计
+USER_CLASSES ?= "buildstats"
+
+# 并行构建配置，这里上限为自己本地的nproc
+BB_NUMBER_THREADS = "26"
+PARALLEL_MAKE = "-j 26"
+
+# ==================== Interactive Configuration ====================
+# 补丁解决策略（非交互式）
+PATCHRESOLVE = "noop"
+
+# ==================== Disk Space Monitoring ====================
+BB_DISKMON_DIRS ??= "\
+    STOPTASKS,${TMPDIR},1G,100K \
+    STOPTASKS,${DL_DIR},1G,100K \
+    STOPTASKS,${SSTATE_DIR},1G,100K \
+    STOPTASKS,/tmp,100M,100K \
+    HALT,${TMPDIR},100M,1K \
+    HALT,${DL_DIR},100M,1K \
+    HALT,${SSTATE_DIR},100M,1K \
+    HALT,/tmp,10M,1K"
+
+# ==================== QEMU Configuration ====================
+# QEMU SDL 支持（用于测试运行）
+PACKAGECONFIG:append:pn-qemu-system-native = " sdl"
+
+
+
+# ==================== Build Configuration Version ====================
+CONF_VERSION = "2"
