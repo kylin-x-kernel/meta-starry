@@ -433,6 +433,19 @@ git push
 
 ---
 
+##  进阶文档
+
+### 团队协作与构建加速
+ **[团队共享与缓存配置](docs/team-sharing.md)**
+- SSTATE_DIR 共享配置
+- DL_DIR 共享配置（节省下载时间）
+- sstate-cache 管理与清理
+
+### 其他文档
+-  [学习资源](docs/learn.md) - Yocto 学习路径
+
+---
+
 ##  项目状态
 
 ### 当前阶段
@@ -467,4 +480,4 @@ Apache License 2.0
 ---
 
 **维护者**: @kylin-x-kernel  @yeanwang666   @guoweikang
-**最后更新**: 2026-01-03
+**最后更新**: 2026-01-04
