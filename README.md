@@ -2,7 +2,7 @@
 
 **StarryOS Yocto 构建系统** - 使用 BitBake 完全复刻 StarryOS 的 Makefile 构建逻辑
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Yocto](https://img.shields.io/badge/yocto-kirkstone-green.svg)](https://www.yoctoproject.org/)
 [![Rust](https://img.shields.io/badge/rust-nightly--1.94.0-orange.svg)](https://www.rust-lang.org/)
 
@@ -462,7 +462,7 @@ git push
 
 ## 📜 许可证
 
-MIT License
+Apache License 2.0
 
 ---
 
