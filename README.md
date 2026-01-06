@@ -66,12 +66,16 @@ cd meta-starry
 
 ```bash
 cd ~/starry-workspace
-source poky/oe-init-build-env build
+TEMPLATECONF=meta-starry/conf source poky/oe-init-build-env build
 ```
 
-首次初始化会自动复制 `meta-starry` 的示例配置：
-- `conf/local.conf.sample` → `build/conf/local.conf`
-- `conf/bblayers.conf.sample` → `build/conf/bblayers.conf`
+首次初始化时，`oe-init-build-env` 会根据 `TEMPLATECONF` 指向的目录生成配置文件。
+
+当 `TEMPLATECONF=meta-starry/conf` 时，会使用 `meta-starry` 的示例配置：
+- `meta-starry/conf/local.conf.sample` → `build/conf/local.conf`
+- `meta-starry/conf/bblayers.conf.sample` → `build/conf/bblayers.conf`
+
+如果你已经初始化过 build 目录，需要删除旧的配置后再重新初始化（否则脚本不会覆盖现有的 `local.conf`/`bblayers.conf`）。
 
 ### 4. 构建 StarryOS 内核
 
