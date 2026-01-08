@@ -34,7 +34,14 @@
 
 ### 环境要求
 
-- Ubuntu 24.04 或兼容系统
+**操作系统：**
+- Ubuntu 24.04 或兼容系统（Debian、Fedora 等）
+
+**构建主机架构（Host）：**
+-  **x86_64**（Intel/AMD 64 位，主要测试平台）
+-  **aarch64**（ARM 64 位）
+
+**软件依赖：**
 - Python 3.8+
 - Git
 - 基础构建工具（gcc, make 等）
@@ -77,25 +84,99 @@ TEMPLATECONF=meta-starry/conf source poky/oe-init-build-env build
 
 如果你已经初始化过 build 目录，需要删除旧的配置后再重新初始化（否则脚本不会覆盖现有的 `local.conf`/`bblayers.conf`）。
 
-同时需要记得时不时更新poky仓库
+同时需要记得时不时更新poky仓库：
+
+```bash
 cd poky
-git pull origin kirkstone 
+git pull origin kirkstone
+```
 
+### 4. 构建选项
 
-### 4. 构建 StarryOS 内核
+#### 选项 A：仅构建内核（快速验证）
 
 ```bash
 # 构建内核
 bitbake starry
 ```
 
-### 5. 构建产物
-
-构建成功后，产物位于：
+**产物位置**：
 ```
 build/tmp-baremetal/deploy/images/aarch64-qemu-virt/
   ├── starry.elf  (86MB) - 包含 DWARF 调试信息的 ELF
   └── starry.bin  (38MB) - 二进制镜像
+```
+
+#### 选项 B：构建完整发行版（推荐）
+
+**构建最小发行版**（快速测试）：
+
+```bash
+# 构建最小镜像（内核 + 基础 rootfs）
+bitbake starry-minimal-image
+```
+
+**构建完整测试发行版**（包含所有工具）：
+
+```bash
+# 构建测试发行版（内核 + 完整 rootfs + 测试工具）
+bitbake starry-test-image
+```
+
+**产物位置**：
+```
+build/tmp-baremetal/deploy/images/aarch64-qemu-virt/
+  ├── starry-test-image-aarch64-qemu-virt.ext4  ← 完整镜像（rootfs）
+  ├── starry-test-image-aarch64-qemu-virt.tar.gz ← 压缩包
+  ├── starry-aarch64-qemu-virt.bin              ← 内核
+  └── starry-aarch64-qemu-virt.elf              ← 内核（含调试符号）
+```
+
+### 5. 启动和测试
+
+#### 启动完整发行版（推荐）
+
+```bash
+# Yocto 自动组合内核 + rootfs 启动
+runqemu starry-test-image nographic
+
+# 或使用最小镜像
+runqemu starry-minimal-image nographic
+```
+
+**启动后**，你将看到 StarryOS 的登录提示：
+
+```
+StarryOS Test Distribution 0.1.0-alpha
+Kernel: StarryOS on aarch64
+
+starryos login: root
+# 自动登录（debug-tweaks 启用）
+
+Welcome to StarryOS Test Distribution!
+...
+
+root@starryos:~# ls /
+bin  boot  dev  etc  home  lib  proc  root  sys  tmp  usr  var
+
+root@starryos:~# uname -a
+Linux starryos ...
+
+root@starryos:~# cat /etc/starry-release
+StarryOS Test Distribution
+Version: 0.1.0-alpha
+Architecture: aarch64
+...
+```
+
+#### 运行测试
+
+```bash
+# 运行 Yocto 集成测试
+bitbake starry-test-image -c testimage
+
+# 查看测试结果
+ls tmp-baremetal/log/oeqa/
 ```
 
 ---

@@ -44,6 +44,15 @@ DISTRO = "starryos"
 # 调试信息: y/n (默认: y)
 #ARCEOS_DWARF = "y"
 
+# ==================== 镜像主机名 ====================
+# 自定义镜像的 hostname (默认为 MACHINE 名称)
+# 取消注释以设置自定义 hostname
+#hostname:pn-base-files = "starryos-test"
+
+# 动态主机名（虚拟机环境）
+# 取消注释以禁用默认 hostname，使用运行时动态分配
+#hostname:pn-base-files = ""
+
 # ==================== 并行构建 ====================
 # 根据你的 CPU 核心数调整
 BB_NUMBER_THREADS = "30"
