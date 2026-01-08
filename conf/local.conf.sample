@@ -49,6 +49,10 @@ DISTRO = "starryos"
 BB_NUMBER_THREADS = "30"
 PARALLEL_MAKE = "-j 30"
 
+# ==================== 跳过版本检查 ====================
+# 跳过 make 4.2.1 版本警告（Kylin 是基于 Debian 的，但 sanity.bbclass 没有识别）
+INHERIT:remove = "sanity"
+
 # ==================== 下载与缓存目录 ====================
 # 可选：使用共享目录加速多次构建
 #DL_DIR = "${TOPDIR}/../downloads"

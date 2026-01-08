@@ -10,23 +10,45 @@ inherit native
 
 # Rust nightly 版本 - 包含稳定化的 maybe_uninit_slice
 RUST_CHANNEL = "nightly"
-RUST_HOST = "x86_64-unknown-linux-gnu"
+# Pin nightly date to keep checksums stable
+RUST_DATE = "2025-12-12"
+
+# 根据 BUILD_ARCH 自动选择主机架构和校验和
+def get_rust_host(d):
+    build_arch = d.getVar('BUILD_ARCH')
+    if build_arch == 'aarch64':
+        return 'aarch64-unknown-linux-gnu'
+    elif build_arch in ['x86_64', 'i686', 'i586', 'i486', 'i386']:
+        return 'x86_64-unknown-linux-gnu'
+    else:
+        bb.fatal(f"Unsupported BUILD_ARCH for Rust: {build_arch}")
+
+def get_rust_toolchain_checksum(d):
+    build_arch = d.getVar('BUILD_ARCH')
+    if build_arch == 'aarch64':
+        return 'd4d5678099a9e102564df80e4be027e74fd9a324cde156f8dda413b94c81d26c'
+    elif build_arch in ['x86_64', 'i686', 'i586', 'i486', 'i386']:
+        return '027d9e55021c9feb42f7ea2dd7588d355932d3bbf9b44f90f2f890cd74373a26'
+    else:
+        bb.fatal(f"Unsupported BUILD_ARCH for Rust: {build_arch}")
+
+RUST_HOST = "${@get_rust_host(d)}"
 
 # 下载预编译工具链和标准库
 SRC_URI = "\
-    https://static.rust-lang.org/dist/rust-${RUST_CHANNEL}-${RUST_HOST}.tar.xz;name=toolchain \
-    https://static.rust-lang.org/dist/rust-std-${RUST_CHANNEL}-aarch64-unknown-none-softfloat.tar.xz;name=std-aarch64 \
-    https://static.rust-lang.org/dist/rust-std-${RUST_CHANNEL}-riscv64gc-unknown-none-elf.tar.xz;name=std-riscv64 \
-    https://static.rust-lang.org/dist/rust-std-${RUST_CHANNEL}-loongarch64-unknown-none-softfloat.tar.xz;name=std-loongarch64 \
-    https://static.rust-lang.org/dist/rust-std-${RUST_CHANNEL}-x86_64-unknown-none.tar.xz;name=std-x86_64 \
+    https://static.rust-lang.org/dist/${RUST_DATE}/rust-${RUST_CHANNEL}-${RUST_HOST}.tar.xz;name=toolchain \
+    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-aarch64-unknown-none-softfloat.tar.xz;name=std-aarch64 \
+    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-riscv64gc-unknown-none-elf.tar.xz;name=std-riscv64 \
+    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-loongarch64-unknown-none-softfloat.tar.xz;name=std-loongarch64 \
+    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-x86_64-unknown-none.tar.xz;name=std-x86_64 \
 "
 
 # SHA256 校验和 (from https://static.rust-lang.org/dist/*.sha256)
-SRC_URI[toolchain.sha256sum] = "9394b78f90ad3ab9cbd676e8fce5d37ab5e3cab96d2231eb5c17657f0e6869b1"
-SRC_URI[std-aarch64.sha256sum] = "045f28c79c26351c9484d9e5bbafc29087dbd35360637e6947c5506858223139"
-SRC_URI[std-riscv64.sha256sum] = "1d880a09fe112f24d055dc651cb7d1a621ec52d598948ed0c22086c320b24413"
-SRC_URI[std-loongarch64.sha256sum] = "69378c60afa546b28297c8f99953ee0ee4c13cad14d53a74bdad3b8069e8dc20"
-SRC_URI[std-x86_64.sha256sum] = "957ba03584adc2c2dcb7bf3006567e8d26567639f72878a2deb0a11e9d9cbc4f"
+SRC_URI[toolchain.sha256sum] = "${@get_rust_toolchain_checksum(d)}"
+SRC_URI[std-aarch64.sha256sum] = "86afbfa9cf2cfb7d686f0f9a616791e28a33da4b2a35ac0fdd889a07c4a95d80"
+SRC_URI[std-riscv64.sha256sum] = "118cdea2c09085159b00dffec9eb918b6c9c1aa64d96851fcab86a87daae06a8"
+SRC_URI[std-loongarch64.sha256sum] = "9b257d4edd7dce99fe10e7124deabc0f3f776476b503e1e5c681f3bbc4aa3ace"
+SRC_URI[std-x86_64.sha256sum] = "fd359e46b581b40c1f8952ca96eb022911d3d58fa1baed3011146e8d62ea7c63"
 
 # 提供 rust-native 和 cargo-native
 PROVIDES = "rust-native cargo-native"
