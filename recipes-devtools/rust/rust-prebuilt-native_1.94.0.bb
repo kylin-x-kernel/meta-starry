@@ -8,13 +8,39 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 
 inherit native
 
-# Rust nightly 版本 - 包含稳定化的 maybe_uninit_slice
-RUST_CHANNEL = "nightly"
-RUST_HOST = "x86_64-unknown-linux-gnu"
+# Rust nightly 工具链版本管理
+# 版本历史：
+#   2026-01-08: 初始版本，支持 x86_64 和 aarch64 Host 架构
+#
+# 更新方法：运行 scripts/update-rust-nightly.sh <new-date>
+
+RUST_DATE = "2026-01-08"
+RUST_CHANNEL = "nightly-${RUST_DATE}"
+
+# 根据构建主机架构选择工具链
+def get_rust_host(d):
+    import re
+    host_arch = d.getVar('BUILD_ARCH')
+    host_os = d.getVar('BUILD_OS')
+    
+    # 映射 Yocto BUILD_ARCH 到 Rust target triple
+    arch_map = {
+        'x86_64': 'x86_64-unknown-linux-gnu',
+        'aarch64': 'aarch64-unknown-linux-gnu',
+        'arm64': 'aarch64-unknown-linux-gnu',  # macOS 可能用 arm64
+    }
+    
+    rust_host = arch_map.get(host_arch)
+    if not rust_host:
+        bb.fatal(f"Unsupported host architecture: {host_arch}. Supported: {list(arch_map.keys())}")
+    
+    return rust_host
+
+RUST_HOST = "${@get_rust_host(d)}"
 
 # 下载预编译工具链和标准库
 SRC_URI = "\
-    https://static.rust-lang.org/dist/rust-${RUST_CHANNEL}-${RUST_HOST}.tar.xz;name=toolchain \
+    https://static.rust-lang.org/dist/rust-${RUST_CHANNEL}-${RUST_HOST}.tar.xz;name=toolchain-${BUILD_ARCH} \
     https://static.rust-lang.org/dist/rust-std-${RUST_CHANNEL}-aarch64-unknown-none-softfloat.tar.xz;name=std-aarch64 \
     https://static.rust-lang.org/dist/rust-std-${RUST_CHANNEL}-riscv64gc-unknown-none-elf.tar.xz;name=std-riscv64 \
     https://static.rust-lang.org/dist/rust-std-${RUST_CHANNEL}-loongarch64-unknown-none-softfloat.tar.xz;name=std-loongarch64 \
@@ -22,11 +48,15 @@ SRC_URI = "\
 "
 
 # SHA256 校验和 (from https://static.rust-lang.org/dist/*.sha256)
-SRC_URI[toolchain.sha256sum] = "9394b78f90ad3ab9cbd676e8fce5d37ab5e3cab96d2231eb5c17657f0e6869b1"
-SRC_URI[std-aarch64.sha256sum] = "045f28c79c26351c9484d9e5bbafc29087dbd35360637e6947c5506858223139"
-SRC_URI[std-riscv64.sha256sum] = "1d880a09fe112f24d055dc651cb7d1a621ec52d598948ed0c22086c320b24413"
-SRC_URI[std-loongarch64.sha256sum] = "69378c60afa546b28297c8f99953ee0ee4c13cad14d53a74bdad3b8069e8dc20"
-SRC_URI[std-x86_64.sha256sum] = "957ba03584adc2c2dcb7bf3006567e8d26567639f72878a2deb0a11e9d9cbc4f"
+# Host toolchains (支持多种构建主机架构)
+SRC_URI[toolchain-x86_64.sha256sum] = "eca1da5e62abb5b906d40778abe0d6b94fe3ad4fb7f18d20bd605ab44b22307b"
+SRC_URI[toolchain-aarch64.sha256sum] = "37f51a77093e910f3167b9275d394e71c228cbe8f5582fe87144c6c673ec80dc"
+
+# Target standard libraries (bare-metal 目标架构)
+SRC_URI[std-aarch64.sha256sum] = "2c7200035b2b0a1e2d6202beb110aa5d3ecb4d8e906946acbd0afe4c01079668"
+SRC_URI[std-riscv64.sha256sum] = "bc5872a8f37f10581b8dcce0da3becb06dde911af99603a8c08dd255bbed16d4"
+SRC_URI[std-loongarch64.sha256sum] = "be5dc72dbd2606fc012ba812f7fafa5b3bd14606ff177d2db99594ea2f99e221"
+SRC_URI[std-x86_64.sha256sum] = "ba5cf0a4592613e940c7db508c6c39698d130bed4abc8db7086ca023697b60a2"
 
 # 提供 rust-native 和 cargo-native
 PROVIDES = "rust-native cargo-native"
