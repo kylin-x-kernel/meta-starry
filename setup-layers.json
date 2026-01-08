@@ -6,11 +6,11 @@
             "branch": "main"
         },
         "poky": {
-            "url": "https://git.yoctoproject.org/git/poky",
+            "url": "https://github.com/kylin-x-kernel/poky.git",
             "branch": "kirkstone"
         },
         "meta-openembedded": {
-            "url": "https://git.openembedded.org/meta-openembedded",
+            "url": "https://github.com/kylin-x-kernel/meta-openembedded.git",
             "branch": "kirkstone"
         }
     },
