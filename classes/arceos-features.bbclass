@@ -160,7 +160,6 @@ def arceos_resolve_features(d):
     bb.note(f"  app_features (raw): {sorted(app_features)}")
     bb.note(f"  CARGO_FEATURES={cargo_features}")
     return cargo_features
-    return cargo_features
 
 # ==================== 由变量展开触发解析 ====================
 # 采用纯函数返回，避免解析期副作用导致 basehash 不稳定
