@@ -317,6 +317,10 @@ do_compile() {
         export PATH="$(dirname "${hosttools_cc}"):${PATH}"
     fi
     
+    # 网络配置 
+    export AX_IP="${ARCEOS_IP}"
+    export AX_GW="${ARCEOS_GW}"
+    
     # ==================== musl 工具链适配 ====================
     arceos_setup_musl_wrapper
     

@@ -45,6 +45,13 @@ ARCEOS_QEMU_MEM ?= "1G"
 # 对应 arceos/Makefile: NET_DEV ?= user
 ARCEOS_QEMU_NET_DEV ?= "user"
 
+# ==================== 网络配置 ====================
+# 对应 arceos/Makefile:
+#   IP ?= 10.0.2.15  (QEMU 用户模式网络默认)
+#   GW ?= 10.0.2.2
+ARCEOS_IP ?= "10.0.2.15"
+ARCEOS_GW ?= "10.0.2.2"
+
 # ==================== Feature 默认值 ====================
 # 对应 Makefile: FEATURES ?= (空)
 ARCEOS_FEATURES ?= ""

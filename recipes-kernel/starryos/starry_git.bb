@@ -32,11 +32,11 @@ PROVIDES += "virtual/kernel"
 KERNEL_IMAGETYPE = "bin"
 KERNEL_IMAGEDEST = "boot"
 
-# 禁用打包任务（bare-metal 内核不需要打包）
+# ==================== Bare-metal 内核打包策略 ====================
 PACKAGES = ""
 ALLOW_EMPTY:${PN} = "1"
 
-# 禁用打包相关任务
+# 禁用 RPM/DEB/IPK 打包任务
 deltask do_package
 deltask do_package_write_rpm
 deltask do_package_write_ipk
@@ -44,8 +44,8 @@ deltask do_package_write_deb
 deltask do_packagedata
 deltask do_package_qa
 
-# 禁用标准 image 依赖
-EXTRA_IMAGEDEPENDS = ""
+# ==================== 清空内核模块依赖 ====================
+KERNELDEPMODDEPEND = ""
 
 # ==================== 版本与源码 ====================
 PV = "1.0+git${SRCPV}"
