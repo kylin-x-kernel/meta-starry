@@ -220,7 +220,7 @@ ls -lh
 
 ```bash
 # ARM64（默认）
-MACHINE = "aarch64-qemu-virt"
+MACHINE ?= "aarch64-qemu-virt"
 
 # RISC-V 64
 MACHINE = "riscv64-qemu-virt"
