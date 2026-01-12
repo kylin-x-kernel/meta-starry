@@ -345,5 +345,6 @@ Apache License 2.0
 - @kylin-x-kernel
 - @yeanwang666
 - @guoweikang
+- @sunhaosheng
 
 **最后更新**：2026-01-09

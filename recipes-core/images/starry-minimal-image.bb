@@ -15,20 +15,23 @@ Includes StarryOS kernel (Rust, #![no_std]), musl C library, BusyBox, and \
 basic utilities. Suitable for embedded systems and testing."
 LICENSE = "Apache-2.0"
 
-# ==================== 复用点 1：继承镜像构建基类 ====================
+# ==================== 继承镜像构建基类 ====================
 # core-image 提供：
 #   - 标准的 rootfs 结构 (/bin, /etc, /lib, /usr)
 #   - 镜像构建任务（do_rootfs, do_image）
 #   - IMAGE_FEATURES、IMAGE_INSTALL 等变量处理
 inherit core-image
 
-# ==================== 复用点 2：依赖 StarryOS 内核 ====================
+# extrausers 提供用户管理功能
+inherit extrausers
+
+# ==================== 依赖 StarryOS 内核 ====================
 # 内核通过 virtual/kernel 机制自动引入（image.bbclass 处理）：
 #   1. starryos.conf 设置: PREFERRED_PROVIDER_virtual/kernel = "starry"
 #   2. image.bbclass 自动添加: do_build[depends] += "virtual/kernel:do_deploy"
 # 因此镜像配方无需显式 DEPENDS 内核（遵循 Yocto 最佳实践）
 
-# ==================== 镜像配置（镜像层职责）====================
+# ==================== 镜像配置====================
 # 这些配置专注于镜像本身的特性，不涉及内核或工具链
 
 # 镜像格式：ext4（可挂载）+ tar.gz（便于分发）
@@ -64,6 +67,16 @@ IMAGE_FEATURES += "\
 # 包含：init, busybox, base-files 等最小系统必需组件
 IMAGE_INSTALL = "packagegroup-core-boot"
 
+# ==================== 用户配置 ====================
+EXTRA_USERS_PARAMS = "\
+    usermod -d /root root; \
+    usermod -s /bin/sh root; \
+"
+# 注意：
+# - 生产环境应设置 root 密码：usermod -p '<encrypted-password>' root
+# - 或者禁用 root 登录：usermod -L root
+# - debug-tweaks 功能会允许空密码登录（仅用于开发）
+
 # ==================== 额外安装的包（可选）====================
 # 如果需要添加额外工具，在这里追加
 # 示例：
@@ -85,11 +98,15 @@ deltask do_sdk_depends
 
 # ==================== 运行时配置 ====================
 # 创建自定义的系统标识文件
-ROOTFS_POSTPROCESS_COMMAND += "create_starry_release; "
+# 使用 ROOTFS_POSTPROCESS_COMMAND（BitBake 标准做法）
+ROOTFS_POSTPROCESS_COMMAND:append = " create_starry_release;"
 
 create_starry_release() {
+    # 确保 /etc 目录存在
+    install -d ${IMAGE_ROOTFS}${sysconfdir}
+    
     # 创建 /etc/starry-release
-    cat > ${IMAGE_ROOTFS}/etc/starry-release <<EOF
+    cat > ${IMAGE_ROOTFS}${sysconfdir}/starry-release << EOF
 StarryOS Minimal Distribution ${DISTRO_VERSION}
 Built with Yocto Project (${DISTRO_CODENAME})
 Kernel: StarryOS (Rust)
@@ -98,14 +115,14 @@ Architecture: ${MACHINE}
 Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 EOF
 
-    # 更新 /etc/os-release
-    if [ -f ${IMAGE_ROOTFS}/etc/os-release ]; then
-        sed -i '/^PRETTY_NAME=/d' ${IMAGE_ROOTFS}/etc/os-release
-        sed -i '1i PRETTY_NAME="StarryOS Minimal ${DISTRO_VERSION}"' ${IMAGE_ROOTFS}/etc/os-release
+    # 更新 /etc/os-release（如果存在）
+    if [ -f ${IMAGE_ROOTFS}${sysconfdir}/os-release ]; then
+        sed -i '/^PRETTY_NAME=/d' ${IMAGE_ROOTFS}${sysconfdir}/os-release
+        echo 'PRETTY_NAME="StarryOS Minimal ${DISTRO_VERSION}"' >> ${IMAGE_ROOTFS}${sysconfdir}/os-release
     fi
 
     # 创建欢迎信息 /etc/motd
-    cat > ${IMAGE_ROOTFS}/etc/motd <<'EOF'
+    cat > ${IMAGE_ROOTFS}${sysconfdir}/motd << 'EOFMOTD'
 
  ____  _                          ___  ____  
 / ___|| |_ __ _ _ __ _ __ _   _  / _ \/ ___| 
@@ -117,7 +134,7 @@ EOF
 StarryOS Minimal Distribution
 Type 'cat /etc/starry-release' for system info.
 
-EOF
+EOFMOTD
 }
 
 
