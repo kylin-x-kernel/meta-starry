@@ -332,6 +332,8 @@ do_compile() {
     # 复刻 build.mk:37-39 的 DWARF 设置
     if [ "${ARCEOS_DWARF}" = "y" ]; then
         export RUSTFLAGS="${RUSTFLAGS} -C force-frame-pointers -C debuginfo=2 -C strip=none"
+        export CARGO_PROFILE_RELEASE_DEBUG=2
+        export CARGO_PROFILE_RELEASE_STRIP="none"
     fi
     
     bbnote "Build configuration:"

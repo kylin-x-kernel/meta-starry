@@ -63,7 +63,7 @@ SRC_URI = "\
     file://0001-use-stable-rust-toolchain.patch \
 "
 
-# 固定 commit hash (与 git submodule status 输出一致)
+# 固定 commit hash 
 SRCREV_starry = "210fa36a628813e06d5419709e1b42ea371e9e25"
 SRCREV_arceos = "eb7a020b7d9e2c506998c6dd8f1325df3e2bdc6d"
 SRCREV_axdriver = "43feffe8b054984471544d423811e686179ec3ad"
@@ -90,6 +90,10 @@ ARCEOS_AX_LIB = "axfeat"
 # 对应: export APP_FEATURES := qemu (默认值)
 # 会被 starry-targets.inc 根据 MACHINE 覆盖
 ARCEOS_APP_FEATURES ?= "qemu"
+
+# 启用 backtrace 支持 (需要 ARCEOS_DWARF=y)
+# axfeat/dwarf 会启用 axbacktrace/dwarf，在 panic 时显示堆栈
+ARCEOS_EXTRA_FEATURES ?= "axfeat/dwarf"
 
 # 引入多目标配置
 require starry-targets.inc
@@ -120,16 +124,64 @@ do_install() {
         bbfatal "Kernel ELF not found: ${kernel_elf}"
     fi
     
+    # 设置 LD_LIBRARY_PATH 以便 rust-objcopy 找到 LLVM 共享库
+    export LD_LIBRARY_PATH="${STAGING_DIR_NATIVE}/usr/lib:${LD_LIBRARY_PATH}"
+    
+    # 设置 PATH 以找到 Rust 工具 (rust-objdump, rust-objcopy)
+    export PATH="${STAGING_DIR_NATIVE}/usr/bin:${PATH}"
+    
+    # ==================== DWARF 嵌入处理 ====================
+    # 复刻 arceos/scripts/make/dwarf.sh
+    if [ "${ARCEOS_DWARF}" = "y" ]; then
+        bbnote "Processing DWARF sections for backtrace support..."
+        
+        cd "${S}/target/${RUST_TARGET}/release"
+        
+        # DWARF 段列表（无点前缀）
+        SECTIONS="debug_abbrev debug_addr debug_aranges debug_info debug_line debug_line_str debug_ranges debug_rnglists debug_str debug_str_offsets"
+        
+        # 检查 ELF 是否有标准 DWARF 信息（.debug_*）
+        # 使用 rust-objcopy --dump-section 测试，因为可能没有 rust-objdump
+        if rust-objcopy starry --dump-section .debug_info=/dev/null 2>/dev/null; then
+            bbnote "Found standard DWARF sections (.debug_*), extracting..."
+            
+            # 1. 从标准 .debug_* 段提取数据
+            for section in $SECTIONS; do
+                rust-objcopy starry --dump-section .$section=$section.bin 2>/dev/null || touch $section.bin
+            done
+            
+            # 2. 删除标准 DEBUG 段
+            rust-objcopy starry --strip-debug
+            
+            # 3. 把数据更新到 ArceOS 自定义段（无点前缀，PT_LOAD）
+            # 4. 然后重命名为 .debug_*，供 addr2line 使用
+            CMD="rust-objcopy starry"
+            for section in $SECTIONS; do
+                if [ -s "$section.bin" ]; then
+                    CMD="$CMD --update-section $section=$section.bin"
+                    CMD="$CMD --rename-section $section=.$section"
+                fi
+            done
+            eval $CMD
+            
+            # 清理临时文件
+            for section in $SECTIONS; do
+                rm -f $section.bin
+            done
+            
+            bbnote "DWARF sections embedded successfully"
+        else
+            bbwarn "No DWARF sections found in ELF - backtrace will show addresses only"
+        fi
+        
+        cd -
+    fi
+    
     # 安装 ELF (调试用)
     install -m 0755 "${kernel_elf}" "${D}/boot/${PN}.elf"
     bbnote "Installed: ${D}/boot/${PN}.elf"
     
-    # 设置 LD_LIBRARY_PATH 以便 rust-objcopy 找到 LLVM 共享库
-    # rust-prebuilt-native 的 LLVM 库在 usr/lib/
-    export LD_LIBRARY_PATH="${STAGING_DIR_NATIVE}/usr/lib:${LD_LIBRARY_PATH}"
-    
     # 生成二进制镜像 (复刻 build.mk:66)
-    # rust-objcopy $(OUT_ELF) --strip-all -O binary $@
     rust-objcopy \
         --binary-architecture=${ARCEOS_ARCH} \
         "${kernel_elf}" \
@@ -154,7 +206,7 @@ do_deploy() {
     # 部署 ELF (调试用)
     install -m 0644 ${D}/boot/${PN}.elf ${DEPLOYDIR}/${PN}-${MACHINE}.elf
     
-    # 创建符号链接 (方便使用)
+    # 创建符号链接 
     ln -sf ${PN}-${MACHINE}.bin ${DEPLOYDIR}/${PN}.bin
     ln -sf ${PN}-${MACHINE}.elf ${DEPLOYDIR}/${PN}.elf
     
