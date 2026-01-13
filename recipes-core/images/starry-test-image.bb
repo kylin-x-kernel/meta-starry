@@ -11,7 +11,6 @@ IMAGE_INSTALL:append = " \
     stress-ng \
     vsock-server \
     starry-ci-tests \
-    starry-daily-tests \
     unixbench \
 "
 
@@ -31,8 +30,9 @@ TEST_TARGET = "OEQemuVsockTarget"
 TEST_TARGET_CID = "103"
 TEST_TARGET_PORT = "5555"
 
-# 测试套件（只运行 starry 测试，无需 ssh/ping）
-TEST_SUITES = "starry"
+# 可用套件：ci, unixbench, stress
+# 可在 local.conf 中覆盖，或通过环境变量设置
+TEST_SUITES ??= "ci unixbench stress"
 
 # 测试超时配置
 TEST_QEMUBOOT_TIMEOUT = "300"       

@@ -1,13 +1,12 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# StarryOS OEQA Runtime Tests
+# StarryOS Stress Tests
 
 from oeqa.runtime.case import OERuntimeTestCase
-from oeqa.core.decorator.depends import OETestDepends
 from oeqa.runtime.decorator.package import OEHasPackage
 
-class StarryStressTest(OERuntimeTestCase):
+class StressTest(OERuntimeTestCase):
     """StarryOS 压力测试套件
     
     使用 stress-ng 进行系统稳定性测试：
@@ -174,86 +173,3 @@ class StarryStressTest(OERuntimeTestCase):
         else:
             self.skipTest("Context switch stress test not supported")
 
-
-class StarryCITest(OERuntimeTestCase):
-    """StarryOS CI functional tests"""
-    
-    def _run_ci_test(self, test_name, timeout=30):
-        """Helper method to run CI test and handle results"""
-        self.logger.info(f"=== CI: {test_name} ===")
-        
-        status, output = self.target.run(
-            f'/usr/lib/starry-ci/{test_name}',
-            timeout=timeout
-        )
-        
-        self.logger.info(f"{test_name}: {output}")
-        
-        if status == 254 or 'Connection lost' in output:
-            self.fail(f"StarryOS crashed: {output}")
-        elif status == 255 and 'Failed to connect' in output:
-            self.skipTest("Connection lost")
-        elif status == 0:
-            self.logger.info(f"{test_name} PASSED")
-        else:
-            self.fail(f"{test_name} failed: {output}")
-    
-    @OEHasPackage(['starry-ci-tests'])
-    def test_ci_file_io_basic(self):
-        self._run_ci_test('file_io_basic')
-    
-    @OEHasPackage(['starry-ci-tests'])
-    def test_ci_multi_processors(self):
-        self._run_ci_test('multi_processors')
-    
-    @OEHasPackage(['starry-ci-tests'])
-    def test_ci_process_spawn(self):
-        self._run_ci_test('process_spawn')
-
-
-class StarryDailyTest(OERuntimeTestCase):
-    """StarryOS daily benchmark tests"""
-    
-    @OEHasPackage(['starry-daily-tests'])
-    def test_daily_concurrency_load(self):
-        self.logger.info("=== Daily: concurrency_load ===")
-        status, output = self.target.run(
-            '/usr/lib/starry-daily/concurrency_load',
-            timeout=300
-        )
-        
-        if status == 254 or 'Connection lost' in output:
-            self.fail(f"StarryOS crashed: {output}")
-        elif status == 0 or 'pass' in output.lower():
-            self.logger.info("concurrency_load PASSED")
-        else:
-            self.fail(f"concurrency_load failed: {output}")
-    
-    @OEHasPackage(['unixbench'])
-    def test_daily_unixbench(self):
-        self.logger.info("=== Daily: UnixBench ===")
-        
-        # Check if run-unixbench exists
-        status, output = self.target.run('which run-unixbench', timeout=10)
-        if status != 0:
-            self.skipTest(f"run-unixbench not found in PATH: {output}")
-        
-        self.logger.info(f"run-unixbench found at: {output.strip()}")
-        
-        # Run UnixBench
-        status, output = self.target.run(
-            'run-unixbench 2>&1',
-            timeout=1800
-        )
-        
-        self.logger.info(f"UnixBench status={status}, output length={len(output)}")
-        self.logger.info(f"UnixBench output:\n{output}")
-        
-        if status == 254 or 'Connection lost' in output:
-            self.fail(f"StarryOS crashed during UnixBench!\n{output}")
-        elif status == 127:
-            self.skipTest(f"UnixBench command not found (status=127): {output}")
-        elif status == 0 or 'System Benchmarks Index Score' in output:
-            self.logger.info("UnixBench PASSED")
-        else:
-            self.fail(f"UnixBench failed (status={status}):\n{output}")
