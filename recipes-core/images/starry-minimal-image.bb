@@ -97,13 +97,14 @@ deltask do_populate_sdk_ext
 deltask do_sdk_depends
 
 # ==================== 运行时配置 ====================
-# 创建自定义的系统标识文件
+# 创建自定义的系统标识文件和启动脚本
 # 使用 ROOTFS_POSTPROCESS_COMMAND（BitBake 标准做法）
-ROOTFS_POSTPROCESS_COMMAND:append = " create_starry_release;"
+ROOTFS_POSTPROCESS_COMMAND:append = " create_starry_release; create_starry_network_info;"
 
 create_starry_release() {
-    # 确保 /etc 目录存在
+    # 确保 /etc 和 /root 目录存在
     install -d ${IMAGE_ROOTFS}${sysconfdir}
+    install -d ${IMAGE_ROOTFS}/root
     
     # 创建 /etc/starry-release
     cat > ${IMAGE_ROOTFS}${sysconfdir}/starry-release << EOF
@@ -135,6 +136,55 @@ StarryOS Minimal Distribution
 Type 'cat /etc/starry-release' for system info.
 
 EOFMOTD
+}
+
+# 创建网络信息显示脚本（用于 OEQA 识别 IP）
+create_starry_network_info() {
+    # 创建启动时自动显示 IP 的脚本
+    install -d ${IMAGE_ROOTFS}${sysconfdir}/init.d
+    
+    cat > ${IMAGE_ROOTFS}${sysconfdir}/init.d/starry-network-info.sh << 'EOF'
+#!/bin/sh
+# StarryOS Network Information Display
+# 用于 OEQA 测试框架识别目标系统 IP
+
+# 等待网络初始化
+sleep 2
+
+# StarryOS 默认使用 QEMU slirp 模式的固定 IP
+STARRY_IP="10.0.2.15"
+STARRY_GW="10.0.2.2"
+
+# 以 OEQA 能识别的格式输出 IP 信息
+echo "============================================"
+echo "StarryOS Network Configuration"
+echo "============================================"
+echo "IP: ${STARRY_IP}"
+echo "Gateway: ${STARRY_GW}"
+echo "inet addr:${STARRY_IP}  Bcast:10.0.2.255  Mask:255.255.255.0"
+echo "============================================"
+
+# 也输出到日志文件
+mkdir -p /var/log
+cat > /var/log/network-info.log << LOGEOF
+StarryOS Network Information
+IP: ${STARRY_IP}
+Gateway: ${STARRY_GW}
+inet addr:${STARRY_IP}
+LOGEOF
+
+EOF
+    
+    chmod +x ${IMAGE_ROOTFS}${sysconfdir}/init.d/starry-network-info.sh
+    
+    # 添加到 /etc/profile 使其在登录时自动执行
+    cat >> ${IMAGE_ROOTFS}${sysconfdir}/profile << 'PROFILEEOF'
+
+# 显示 StarryOS 网络信息（用于 OEQA 测试）
+if [ -x /etc/init.d/starry-network-info.sh ]; then
+    /etc/init.d/starry-network-info.sh
+fi
+PROFILEEOF
 }
 
 
