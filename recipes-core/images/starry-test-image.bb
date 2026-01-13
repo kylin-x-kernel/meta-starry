@@ -9,15 +9,18 @@ DESCRIPTION = "StarryOS test image with complete test suite and OEQA support"
 # ==================== 添加测试套件 ====================
 IMAGE_INSTALL:append = " \
     stress-ng \
-    ptest-runner \
-    starry-test-suite-ptest \
     vsock-server \
+    starry-ci-tests \
+    starry-daily-tests \
+    unixbench \
 "
 
 # ==================== 镜像配置 ====================
 IMAGE_FSTYPES = "ext4 tar.gz"
 IMAGE_ROOTFS_SIZE ?= "8192000"
 IMAGE_ROOTFS_EXTRA_SPACE = "1048576"
+
+QB_MEM = "-m 2G" 
 
 # ==================== 测试框架 ====================
 inherit testimage

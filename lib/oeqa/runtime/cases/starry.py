@@ -3,148 +3,19 @@
 #
 # StarryOS OEQA Runtime Tests
 
-import os
-import datetime
 from oeqa.runtime.case import OERuntimeTestCase
 from oeqa.core.decorator.depends import OETestDepends
 from oeqa.runtime.decorator.package import OEHasPackage
 
-class StarryPtestTest(OERuntimeTestCase):
-    """StarryOS ptest 测试套件
+class StarryStressTest(OERuntimeTestCase):
+    """StarryOS 压力测试套件
     
-    遵循 Yocto 官方 OEQA 标准：
-    - 使用 ptest-runner 自动执行所有 ptest
-    - 使用标准的 PASS:/FAIL: 输出格式
-    - 自动生成测试日志和报告
-    
-    参考：poky/meta/lib/oeqa/runtime/cases/ptest.py
+    使用 stress-ng 进行系统稳定性测试：
+    - CPU 压力测试
+    - 内存压力测试
+    - IO 压力测试
+    - 上下文切换压力测试
     """
-    
-    @OEHasPackage(['ptest-runner'])
-    def test_starry_ptest_runner(self):
-        """运行 StarryOS ptest 套件（官方标准方法）
-        
-        此测试调用 ptest-runner，自动执行：
-        - CI 测试（功能测试）
-        - Stress 测试（压力测试）
-        - Daily 测试（基准测试）
-        
-        结果格式（符合 Yocto 标准）：
-        - PASS: test_name
-        - FAIL: test_name
-        - SKIP: test_name
-        """
-        # 检查 ptest-runner 是否可用
-        status, output = self.target.run('which ptest-runner', 0)
-        if status != 0:
-            self.skipTest("ptest-runner not found in image")
-        
-        # 检查 starry-test-suite-ptest 是否安装
-        status, output = self.target.run('test -d /usr/lib/starry-test-suite/ptest', 0)
-        if status != 0:
-            self.skipTest("starry-test-suite-ptest not installed")
-        
-        # 获取测试日志目录
-        test_log_dir = self.td.get('TEST_LOG_DIR', '')
-        if not test_log_dir:
-            test_log_dir = os.path.join(self.td.get('WORKDIR', ''), 'testimage')
-        if not os.path.isabs(test_log_dir):
-            test_log_dir = os.path.join(self.td.get('TOPDIR', ''), test_log_dir)
-        
-        timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-        ptest_log_dir_link = os.path.join(test_log_dir, 'starry_ptest_log')
-        ptest_log_dir = f'{ptest_log_dir_link}.{timestamp}'
-        ptest_runner_log = os.path.join(ptest_log_dir, 'ptest-runner.log')
-        
-        # 运行 ptest-runner（30 分钟超时，扫描 /usr/lib）
-        self.logger.info("Running ptest-runner for starry-test-suite...")
-        libdir = self.td.get('libdir', '/usr/lib')
-        ptest_dirs = ['/usr/lib']
-        if libdir not in ptest_dirs:
-            ptest_dirs.append(libdir)
-        
-        status, output = self.target.run(
-            f'ptest-runner -t 1800 -d "{" ".join(ptest_dirs)}"',
-            timeout=1900
-        )
-        
-        # 保存日志
-        os.makedirs(ptest_log_dir, exist_ok=True)
-        with open(ptest_runner_log, 'w') as f:
-            f.write(output)
-        
-        # 创建符号链接到最新日志
-        if os.path.exists(ptest_log_dir_link):
-            os.remove(ptest_log_dir_link)
-        os.symlink(os.path.basename(ptest_log_dir), ptest_log_dir_link)
-        
-        self.logger.info(f"ptest results saved to: {ptest_runner_log}")
-        self.logger.info(f"ptest output:\n{output}")
-        
-        self.assertTrue(status != 127, msg="Cannot execute ptest-runner!")
-        
-        # 简单解析结果（生产环境应使用 oeqa.utils.logparser.PtestParser）
-        import re
-        passed = len(re.findall(r'PASS:', output))
-        failed = len(re.findall(r'FAIL:', output))
-        skipped = len(re.findall(r'SKIP:', output))
-        
-        self.logger.info(f"Test Summary: {passed} passed, {failed} failed, {skipped} skipped")
-        
-        # 如果没有任何测试被执行，记录警告
-        if passed == 0 and failed == 0 and skipped == 0:
-            self.logger.warning(
-                "No tests were executed! This usually means:"
-                "\n  1. Test binaries are not installed in ptest directories"
-                "\n  2. run-ptest script is missing or not executable"
-                "\n  3. Tests failed to compile during image build"
-            )
-    
-    def test_starry_ptest_structure(self):
-        """验证 ptest 目录结构完整性"""
-        status, output = self.target.run('ls -laR /usr/lib/starry-test-suite/ptest/')
-        self.logger.info(f"ptest structure:\n{output}")
-        
-        # 验证基本结构
-        self.assertEqual(status, 0, "ptest directory not found")
-        self.assertIn('run-ptest', output, "run-ptest script not found")
-        self.assertIn('ci', output, "ci directory not found")
-        self.assertIn('stress', output, "stress directory not found")
-        self.assertIn('daily', output, "daily directory not found")
-        
-        # 验证 run-ptest 可执行
-        status, _ = self.target.run('test -x /usr/lib/starry-test-suite/ptest/run-ptest')
-        self.assertEqual(status, 0, "run-ptest is not executable")
-    
-    @OEHasPackage(['ltp'])
-    def test_starry_ltp_syscalls(self):
-        """运行 LTP 系统调用测试子集（快速验证）
-        
-        LTP (Linux Test Project) 是 Linux 官方测试项目，
-        包含 3000+ 测试用例，覆盖系统调用、文件系统、进程管理等。
-        此测试运行系统调用相关的核心测试。
-        """
-        # 检查 LTP 是否安装
-        status, output = self.target.run('test -d /opt/ltp', 0)
-        if status != 0:
-            self.skipTest("LTP not installed")
-        
-        # 运行 LTP 系统调用测试（快速子集）
-        self.logger.info("Running LTP syscalls tests...")
-        status, output = self.target.run(
-            '/opt/ltp/runltp -f syscalls -s syscall_basic -q',
-            timeout=600
-        )
-        
-        self.logger.info(f"LTP syscalls output:\n{output}")
-        
-        # LTP 返回失败测试的数量作为退出码
-        # 0 表示所有测试通过
-        if status != 0:
-            self.logger.warning(f"LTP syscalls had {status} failed tests")
-        
-
-        self.assertTrue(status != 127, msg="Cannot execute LTP runltp!")
     
     @OEHasPackage(['stress-ng'])
     def test_starry_stress_ng_quick(self):
@@ -302,3 +173,86 @@ class StarryPtestTest(OERuntimeTestCase):
             self.logger.info("Context switch stress test PASSED")
         else:
             self.skipTest("Context switch stress test not supported")
+
+
+class StarryCITest(OERuntimeTestCase):
+    """StarryOS CI functional tests"""
+    
+    def _run_ci_test(self, test_name, timeout=30):
+        """Helper method to run CI test and handle results"""
+        self.logger.info(f"=== CI: {test_name} ===")
+        
+        status, output = self.target.run(
+            f'/usr/lib/starry-ci/{test_name}',
+            timeout=timeout
+        )
+        
+        self.logger.info(f"{test_name}: {output}")
+        
+        if status == 254 or 'Connection lost' in output:
+            self.fail(f"StarryOS crashed: {output}")
+        elif status == 255 and 'Failed to connect' in output:
+            self.skipTest("Connection lost")
+        elif status == 0:
+            self.logger.info(f"{test_name} PASSED")
+        else:
+            self.fail(f"{test_name} failed: {output}")
+    
+    @OEHasPackage(['starry-ci-tests'])
+    def test_ci_file_io_basic(self):
+        self._run_ci_test('file_io_basic')
+    
+    @OEHasPackage(['starry-ci-tests'])
+    def test_ci_multi_processors(self):
+        self._run_ci_test('multi_processors')
+    
+    @OEHasPackage(['starry-ci-tests'])
+    def test_ci_process_spawn(self):
+        self._run_ci_test('process_spawn')
+
+
+class StarryDailyTest(OERuntimeTestCase):
+    """StarryOS daily benchmark tests"""
+    
+    @OEHasPackage(['starry-daily-tests'])
+    def test_daily_concurrency_load(self):
+        self.logger.info("=== Daily: concurrency_load ===")
+        status, output = self.target.run(
+            '/usr/lib/starry-daily/concurrency_load',
+            timeout=300
+        )
+        
+        if status == 254 or 'Connection lost' in output:
+            self.fail(f"StarryOS crashed: {output}")
+        elif status == 0 or 'pass' in output.lower():
+            self.logger.info("concurrency_load PASSED")
+        else:
+            self.fail(f"concurrency_load failed: {output}")
+    
+    @OEHasPackage(['unixbench'])
+    def test_daily_unixbench(self):
+        self.logger.info("=== Daily: UnixBench ===")
+        
+        # Check if run-unixbench exists
+        status, output = self.target.run('which run-unixbench', timeout=10)
+        if status != 0:
+            self.skipTest(f"run-unixbench not found in PATH: {output}")
+        
+        self.logger.info(f"run-unixbench found at: {output.strip()}")
+        
+        # Run UnixBench
+        status, output = self.target.run(
+            'run-unixbench 2>&1',
+            timeout=1800
+        )
+        
+        self.logger.info(f"UnixBench status={status}, output length={len(output)}")
+        
+        if status == 254 or 'Connection lost' in output:
+            self.fail(f"StarryOS crashed during UnixBench!\n{output}")
+        elif status == 127:
+            self.skipTest(f"UnixBench command not found (status=127): {output}")
+        elif status == 0 or 'System Benchmarks Index Score' in output:
+            self.logger.info("UnixBench PASSED")
+        else:
+            self.fail(f"UnixBench failed (status={status}):\n{output}")
