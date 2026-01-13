@@ -247,6 +247,7 @@ class StarryDailyTest(OERuntimeTestCase):
         )
         
         self.logger.info(f"UnixBench status={status}, output length={len(output)}")
+        self.logger.info(f"UnixBench output:\n{output}")
         
         if status == 254 or 'Connection lost' in output:
             self.fail(f"StarryOS crashed during UnixBench!\n{output}")
