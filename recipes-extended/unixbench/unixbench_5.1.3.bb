@@ -11,7 +11,7 @@ SRCREV = "c7ea5d492b1f82d4ccd270fee27863425e436235"
 S = "${WORKDIR}/git/UnixBench"
 
 DEPENDS = "perl-native"
-RDEPENDS:${PN} = "bash"(no compilation required)
+RDEPENDS:${PN} = "bash"
 
 do_compile() {
     export CC="${CC}"
