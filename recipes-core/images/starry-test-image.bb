@@ -21,6 +21,7 @@ IMAGE_ROOTFS_SIZE ?= "8192000"
 IMAGE_ROOTFS_EXTRA_SPACE = "1048576"
 
 QB_MEM = "-m 2G" 
+QEMU_USE_KVM = ""
 
 # ==================== 测试框架 ====================
 inherit testimage
