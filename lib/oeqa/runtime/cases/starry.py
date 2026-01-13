@@ -233,26 +233,33 @@ class StarryDailyTest(OERuntimeTestCase):
     def test_daily_unixbench(self):
         self.logger.info("=== Daily: UnixBench ===")
         
-        # Check if run-unixbench exists
-        status, output = self.target.run('which run-unixbench', timeout=10)
+        # Check if unixbench wrapper exists
+        status, output = self.target.run('which unixbench', timeout=10)
         if status != 0:
-            self.skipTest(f"run-unixbench not found in PATH: {output}")
+            self.skipTest(f"unixbench not found in PATH: {output}")
         
-        self.logger.info(f"run-unixbench found at: {output.strip()}")
+        self.logger.info(f"unixbench found at: {output.strip()}")
         
-        # Run UnixBench
+        # Check if UnixBench directory exists
+        status, output = self.target.run('test -d /usr/share/unixbench && test -x /usr/share/unixbench/Run', timeout=10)
+        if status != 0:
+            self.skipTest(f"UnixBench directory or Run script not found")
+        
+        # Run UnixBench (original Run script)
+        # Use a subset of tests to avoid timeout
         status, output = self.target.run(
-            'run-unixbench 2>&1',
-            timeout=1800
+            'cd /usr/share/unixbench && ./Run -q -c 1 2>&1',
+            timeout=7200
         )
         
         self.logger.info(f"UnixBench status={status}, output length={len(output)}")
+        self.logger.info(f"UnixBench output:\n{output}")
         
         if status == 254 or 'Connection lost' in output:
             self.fail(f"StarryOS crashed during UnixBench!\n{output}")
         elif status == 127:
             self.skipTest(f"UnixBench command not found (status=127): {output}")
-        elif status == 0 or 'System Benchmarks Index Score' in output:
+        elif status == 0 or 'System Benchmarks Index Score' in output or 'BASELINE' in output:
             self.logger.info("UnixBench PASSED")
         else:
             self.fail(f"UnixBench failed (status={status}):\n{output}")

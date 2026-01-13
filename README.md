@@ -212,6 +212,48 @@ ls -lh
 
 ---
 
+## 测试指南
+
+集成了基于 Yocto OEQA 的完整测试套件，包含 CI 功能测试、LTP 系统调用测试和 stress-ng 压力测试。
+
+### 1. 自动化全量测试（推荐）
+
+使用 BitBake 的 `testimage` 任务自动完成构建、启动和测试流程：
+
+```bash
+bitbake starry-test-image -c testimage
+```
+
+此过程会自动：
+- 启动 QEMU (使用 slirp 网络)
+- 通过 vsock 建立测试控制通道
+- 执行 ptest (CI/Stress/Daily)
+- 执行 LTP 系统调用测试
+- 执行 stress-ng 压力测试 (CPU/Memory/IO)
+- 生成测试报告
+
+### 2. 手动运行测试
+
+进入系统后手动执行测试命令：
+
+```bash
+# 1. 启动测试镜像
+runqemu starry-test-image nographic slirp
+
+# 2. 在 StarryOS 终端中运行测试：
+
+# 运行 ptest 套件 (CI/Stress/Daily)
+ptest-runner
+
+# 运行 LTP 系统调用测试
+/opt/ltp/runltp -f syscalls -s syscall_basic -q
+
+# 运行 CPU 压力测试
+stress-ng --cpu 2 --timeout 10s --metrics-brief
+```
+
+---
+
 ## 切换架构
 
 ### 方法 1：修改配置文件

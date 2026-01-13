@@ -49,7 +49,16 @@ KERNEL_IMAGEDEST = "boot"
 SERIAL_CONSOLES = "115200;ttyAMA0"
 
 # ==================== Rootfs 后处理 ====================
-ROOTFS_POSTPROCESS_COMMAND:append = " create_starry_os_release; setup_vsock_autostart; "
+ROOTFS_POSTPROCESS_COMMAND:append = " create_starry_os_release; setup_vsock_autostart; setup_unixbench_env; "
+
+# 配置 UnixBench 环境变量
+setup_unixbench_env() {
+    cat >> ${IMAGE_ROOTFS}${sysconfdir}/profile << 'UBEOF'
+
+# ==== UnixBench 环境变量 ====
+export UB_BINDIR=/usr/share/unixbench/pgms/
+UBEOF
+}
 
 # 配置 vsock-server 自动启动
 setup_vsock_autostart() {
