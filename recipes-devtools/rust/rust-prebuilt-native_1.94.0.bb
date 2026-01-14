@@ -1,6 +1,5 @@
 # rust-prebuilt-native
 # 下载并安装 Rust 官方预编译工具链 (nightly)
-# Nightly 版本包含所有最新的稳定化特性
 
 SUMMARY = "Rust nightly prebuilt toolchain (official binaries)"
 LICENSE = "MIT | Apache-2.0"
@@ -8,146 +7,157 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 
 inherit native
 
-# Rust nightly 工具链版本管理
-# 版本历史：
-#   2025-12-12: 固定 nightly 日期，避免校验和漂移
-#
-# 更新方法：运行 scripts/update-rust-nightly.sh <new-date>
+DEPENDS = "xz-native"
 
+# ==================== 版本配置 ====================
 RUST_DATE = "2025-12-12"
 RUST_CHANNEL = "nightly"
 
-# 根据构建主机架构选择工具链
-def get_rust_host(d):
-    import re
-    host_arch = d.getVar('BUILD_ARCH')
-    host_os = d.getVar('BUILD_OS')
+# ==================== 目标架构定义====================
+# 添加新 target：在此字典添加一条即可
+python __anonymous() {
+    rust_targets = {
+        # Bare-metal targets (for kernel development)
+        'aarch64-unknown-none-softfloat': '86afbfa9cf2cfb7d686f0f9a616791e28a33da4b2a35ac0fdd889a07c4a95d80',
+        'riscv64gc-unknown-none-elf': '118cdea2c09085159b00dffec9eb918b6c9c1aa64d96851fcab86a87daae06a8',
+        'loongarch64-unknown-none-softfloat': '9b257d4edd7dce99fe10e7124deabc0f3f776476b503e1e5c681f3bbc4aa3ace',
+        'x86_64-unknown-none': 'fd359e46b581b40c1f8952ca96eb022911d3d58fa1baed3011146e8d62ea7c63',
+        
+        # Linux targets (for userspace)
+        'aarch64-unknown-linux-musl': 'acb4307ee294acf881315928993c4960f2ef780b644f0a8fd166377f7c3d310d',
+    }
     
-    # 映射 Yocto BUILD_ARCH 到 Rust target triple
+    d.setVar('RUST_TARGETS', ' '.join(rust_targets.keys()))
+    
+    for target, sha256 in rust_targets.items():
+        d.setVar(f'RUST_TARGET_{target.replace("-", "_").upper()}_SHA256', sha256)
+}
+
+# ==================== 主机工具链选择 ====================
+def get_rust_host(d):
     arch_map = {
         'x86_64': 'x86_64-unknown-linux-gnu',
         'aarch64': 'aarch64-unknown-linux-gnu',
-        'arm64': 'aarch64-unknown-linux-gnu',  # macOS 可能用 arm64
+        'arm64': 'aarch64-unknown-linux-gnu',
     }
     
+    host_arch = d.getVar('BUILD_ARCH')
     rust_host = arch_map.get(host_arch)
     if not rust_host:
-        bb.fatal(f"Unsupported host architecture: {host_arch}. Supported: {list(arch_map.keys())}")
+        bb.fatal(f"Unsupported host: {host_arch}. Supported: {list(arch_map.keys())}")
     
     return rust_host
 
 RUST_HOST = "${@get_rust_host(d)}"
 
-# 下载预编译工具链和标准库
-SRC_URI = "\
-    https://static.rust-lang.org/dist/${RUST_DATE}/rust-${RUST_CHANNEL}-${RUST_HOST}.tar.xz;name=toolchain-${BUILD_ARCH} \
-    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-aarch64-unknown-none-softfloat.tar.xz;name=std-aarch64 \
-    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-riscv64gc-unknown-none-elf.tar.xz;name=std-riscv64 \
-    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-loongarch64-unknown-none-softfloat.tar.xz;name=std-loongarch64 \
-    https://static.rust-lang.org/dist/${RUST_DATE}/rust-std-${RUST_CHANNEL}-x86_64-unknown-none.tar.xz;name=std-x86_64 \
-"
+# ==================== 下载 URL 自动生成 ====================
+python __anonymous() {
+    rust_date = d.getVar('RUST_DATE')
+    rust_channel = d.getVar('RUST_CHANNEL')
+    rust_host = d.getVar('RUST_HOST')
+    rust_targets = d.getVar('RUST_TARGETS').split()
+    
+    base_url = f'https://static.rust-lang.org/dist/{rust_date}'
+    
+    # 主机工具链
+    src_uri = [
+        f'{base_url}/rust-{rust_channel}-{rust_host}.tar.xz;name=toolchain-${{BUILD_ARCH}}'
+    ]
+    
+    # 目标标准库
+    for target in rust_targets:
+        src_uri.append(f'{base_url}/rust-std-{rust_channel}-{target}.tar.xz;name=std-{target}')
+    
+    d.setVar('SRC_URI', ' '.join(src_uri))
+}
 
-# SHA256 校验和 (from https://static.rust-lang.org/dist/*.sha256)
-# Host toolchains (支持多种构建主机架构)
+# ==================== SHA256 校验和====================
+# 主机工具链
 SRC_URI[toolchain-x86_64.sha256sum] = "027d9e55021c9feb42f7ea2dd7588d355932d3bbf9b44f90f2f890cd74373a26"
 SRC_URI[toolchain-aarch64.sha256sum] = "d4d5678099a9e102564df80e4be027e74fd9a324cde156f8dda413b94c81d26c"
 
-# Target standard libraries (bare-metal 目标架构)
-SRC_URI[std-aarch64.sha256sum] = "86afbfa9cf2cfb7d686f0f9a616791e28a33da4b2a35ac0fdd889a07c4a95d80"
-SRC_URI[std-riscv64.sha256sum] = "118cdea2c09085159b00dffec9eb918b6c9c1aa64d96851fcab86a87daae06a8"
-SRC_URI[std-loongarch64.sha256sum] = "9b257d4edd7dce99fe10e7124deabc0f3f776476b503e1e5c681f3bbc4aa3ace"
-SRC_URI[std-x86_64.sha256sum] = "fd359e46b581b40c1f8952ca96eb022911d3d58fa1baed3011146e8d62ea7c63"
+# 目标标准库（自动从 RUST_TARGETS 生成）
+python __anonymous() {
+    rust_targets = d.getVar('RUST_TARGETS').split()
+    for target in rust_targets:
+        sha256_var = f'RUST_TARGET_{target.replace("-", "_").upper()}_SHA256'
+        sha256 = d.getVar(sha256_var)
+        d.setVarFlag('SRC_URI', f'std-{target}.sha256sum', sha256)
+}
 
-# 提供 rust-native 和 cargo-native
+# ==================== 提供虚拟包 ====================
 PROVIDES = "rust-native cargo-native"
 
 S = "${WORKDIR}"
 
 do_configure[noexec] = "1"
 do_compile[noexec] = "1"
+do_fetch[network] = "1"
 
-# 直接安装到 ${D}/usr
+# ==================== 安装逻辑 ====================
 do_install() {
     TOOLCHAIN_DIR="${S}/rust-${RUST_CHANNEL}-${RUST_HOST}"
     
-    # 手动复制文件到 ${D}/usr
-    install -d ${D}/usr/bin
-    install -d ${D}/usr/lib
-    install -d ${D}/usr/libexec
+    install -d ${D}/usr/bin ${D}/usr/lib ${D}/usr/libexec
     
-    # 复制 bin
+    # 安装主工具链
     cp -a ${TOOLCHAIN_DIR}/rustc/bin/* ${D}/usr/bin/
     cp -a ${TOOLCHAIN_DIR}/cargo/bin/* ${D}/usr/bin/
-    
-    # 复制其他工具 (如果存在)
-    for component in clippy-preview rustfmt-preview rust-analyzer-preview; do
-        if [ -d "${TOOLCHAIN_DIR}/${component}/bin" ]; then
-            cp -a ${TOOLCHAIN_DIR}/${component}/bin/* ${D}/usr/bin/ 2>/dev/null || true
-        fi
-    done
-    
-    # 复制 lib
     cp -a ${TOOLCHAIN_DIR}/rustc/lib/* ${D}/usr/lib/
     
-    # 复制 libexec (如果存在)
-    if [ -d "${TOOLCHAIN_DIR}/rustc/libexec" ]; then
+    [ -d "${TOOLCHAIN_DIR}/rustc/libexec" ] && \
         cp -a ${TOOLCHAIN_DIR}/rustc/libexec/* ${D}/usr/libexec/
-    fi
     
-    # 复制 rust-std 目标库
+    # 安装可选工具
+    for component in clippy-preview rustfmt-preview rust-analyzer-preview; do
+        [ -d "${TOOLCHAIN_DIR}/${component}/bin" ] && \
+            cp -a ${TOOLCHAIN_DIR}/${component}/bin/* ${D}/usr/bin/ 2>/dev/null || true
+    done
+    
+    # 安装标准库
     install -d ${D}/usr/lib/rustlib
     
-    # 复制主机标准库
+    # 主机标准库
     if [ -d "${TOOLCHAIN_DIR}/rust-std-${RUST_HOST}/lib/rustlib/${RUST_HOST}" ]; then
-        cp -a ${TOOLCHAIN_DIR}/rust-std-${RUST_HOST}/lib/rustlib/${RUST_HOST} ${D}/usr/lib/rustlib/
+        cp -a ${TOOLCHAIN_DIR}/rust-std-${RUST_HOST}/lib/rustlib/${RUST_HOST} \
+              ${D}/usr/lib/rustlib/
     fi
     
-    # 复制目标架构标准库
-    for target in aarch64-unknown-none-softfloat riscv64gc-unknown-none-elf loongarch64-unknown-none-softfloat x86_64-unknown-none; do
+    # 目标标准库
+    for target in ${RUST_TARGETS}; do
         std_dir="${S}/rust-std-${RUST_CHANNEL}-${target}/rust-std-${target}/lib/rustlib/${target}"
         if [ -d "${std_dir}" ]; then
             bbnote "Installing std for ${target}"
             cp -a ${std_dir} ${D}/usr/lib/rustlib/
+        else
+            bbwarn "std not found for ${target}: ${std_dir}"
         fi
     done
     
-    # 创建 LLVM 工具的符号链接到 bindir
-    # rust-prebuilt 包含的 LLVM 工具在 lib/rustlib/${HOST_TRIPLE}/bin/
-    HOST_TRIPLE="${RUST_HOST}"
-    LLVM_BIN_DIR="${D}/usr/lib/rustlib/${HOST_TRIPLE}/bin"
-    
+    # 链接 LLVM 工具
+    LLVM_BIN_DIR="${D}/usr/lib/rustlib/${RUST_HOST}/bin"
     if [ -d "${LLVM_BIN_DIR}" ]; then
-        bbnote "Creating symlinks for LLVM tools from ${LLVM_BIN_DIR}"
         for tool in ${LLVM_BIN_DIR}/*; do
-            if [ -f "$tool" ] && [ -x "$tool" ]; then
-                tool_name=$(basename "$tool")
-                bbnote "  Linking ${tool_name}"
-                ln -sf "../lib/rustlib/${HOST_TRIPLE}/bin/${tool_name}" "${D}/usr/bin/${tool_name}"
-            fi
+            [ -f "$tool" ] && [ -x "$tool" ] && \
+                ln -sf "../lib/rustlib/${RUST_HOST}/bin/$(basename $tool)" \
+                       "${D}/usr/bin/$(basename $tool)"
         done
-    else
-        bbwarn "LLVM tools directory not found: ${LLVM_BIN_DIR}"
     fi
     
     # 验证安装
     if [ ! -x "${D}/usr/bin/rustc" ]; then
-        bbfatal "rustc not found at ${D}/usr/bin/rustc"
+        bbfatal "rustc not installed"
     fi
     if [ ! -x "${D}/usr/bin/cargo" ]; then
-        bbfatal "cargo not found at ${D}/usr/bin/cargo"
+        bbfatal "cargo not installed"
     fi
-    
-    bbnote "Rust nightly installed to ${D}/usr"
 }
 
-# 跳过 QA 检查
-INSANE_SKIP:${PN} = "already-stripped libdir"
-
-# 需要网络下载
-do_fetch[network] = "1"
-
-# 手动处理 sysroot staging
+# ==================== Sysroot 预处理 ====================
 SYSROOT_PREPROCESS_FUNCS += "rust_prebuilt_sysroot_preprocess"
 rust_prebuilt_sysroot_preprocess() {
     sysroot_stage_dir ${D}/usr ${SYSROOT_DESTDIR}${STAGING_DIR_NATIVE}/usr
 }
+
+# ==================== QA 跳过 ====================
+INSANE_SKIP:${PN} = "already-stripped libdir"

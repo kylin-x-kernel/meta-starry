@@ -1,9 +1,6 @@
-# StarryOS Yocto 构建本地配置模板
+# StarryOS Yocto 构建本地配置
 #
-# 使用方法:
-#   1. source poky/oe-init-build-env build
-#   2. 将此文件复制到 build/conf/local.conf
-#   或者设置 TEMPLATECONF 指向 meta-starry/conf
+# 本文件由 meta-starry 项目生成
 
 # ==================== 机器选择 ====================
 # 可选值:
@@ -15,19 +12,6 @@ MACHINE ?= "aarch64-qemu-virt"
 
 # ==================== 发行版 ====================
 DISTRO = "starryos"
-
-# ==================== Rust 工具链 ====================
-# 默认使用 rustup 预编译的 nightly 工具链（通过 rust-prebuilt-native）
-# 要求：系统已安装 rustup 和 nightly 工具链
-# 
-# 安装方法：
-#   rustup toolchain install nightly
-#   rustup target add aarch64-unknown-none-softfloat --toolchain nightly
-#   rustup target add riscv64gc-unknown-none-elf --toolchain nightly
-#   rustup target add loongarch64-unknown-none-softfloat --toolchain nightly
-#   rustup target add x86_64-unknown-none --toolchain nightly
-#
-# 注意：必须使用 nightly，因为 StarryOS 需要 unstable features
 
 # ==================== ArceOS 构建参数 ====================
 # 取消注释以覆盖默认值
@@ -55,8 +39,8 @@ DISTRO = "starryos"
 
 # ==================== 并行构建 ====================
 # 根据你的 CPU 核心数调整
-BB_NUMBER_THREADS = "30"
-PARALLEL_MAKE = "-j 30"
+BB_NUMBER_THREADS = "8"
+PARALLEL_MAKE = "-j 8"
 
 # ==================== 跳过版本检查 ====================
 # 跳过 make 4.2.1 版本警告（Kylin 是基于 Debian 的，但 sanity.bbclass 没有识别）
@@ -64,8 +48,24 @@ INHERIT:remove = "sanity"
 
 # ==================== 下载与缓存目录 ====================
 # 可选：使用共享目录加速多次构建
-#DL_DIR = "${TOPDIR}/../downloads"
-#SSTATE_DIR = "${TOPDIR}/../sstate-cache"
+DL_DIR = "${TOPDIR}/../downloads"
+SSTATE_DIR = "${TOPDIR}/../sstate-cache"
+
+# ==================== 国内镜像源 ====================
+# 使用国内镜像加速源码下载（中科院软件所镜像站）
+# 注意：仅作为备选镜像，不代理 Git 仓库
+INHERIT += "own-mirrors"
+SOURCE_MIRROR_URL = "https://mirror.iscas.ac.cn/yocto/mirror/sources/"
+
+# PREMIRRORS 会强制优先使用镜像，但镜像可能不完整，已禁用
+# 如需启用，请确保镜像源有完整的文件
+#PREMIRRORS:append = "\
+#  git://.*/.* https://mirrors.xxx.com/yocto/git2/ \n \
+#  gitsm://.*/.* https://mirrors.xxx.com/yocto/git2/ \n \
+#  http://.*/.* https://mirror.iscas.ac.cn/yocto/mirror/sources/ \n \
+#  https://.*/.* https://mirror.iscas.ac.cn/yocto/mirror/sources/ \n \
+#  ftp://.*/.* https://mirror.iscas.ac.cn/yocto/mirror/sources/ \n \
+#"
 
 # ==================== 磁盘空间监控 ====================
 BB_DISKMON_DIRS ??= "\
@@ -79,8 +79,11 @@ BB_DISKMON_DIRS ??= "\
     HALT,/tmp,10M,1K"
 
 # ==================== 构建选项 ====================
-# 禁用交互式补丁解决
 PATCHRESOLVE = "noop"
+USER_CLASSES ?= "buildstats"
 
 # 版本标识
-CONF_VERSION = "2"
+CONF_VERSION = "3"
+
+# 临时配置：运行哪个测试
+TEST_SUITES = "ci unixbench stress"
