@@ -48,8 +48,8 @@ INHERIT:remove = "sanity"
 
 # ==================== 下载与缓存目录 ====================
 # 可选：使用共享目录加速多次构建
-DL_DIR = "${TOPDIR}/../downloads"
-SSTATE_DIR = "${TOPDIR}/../sstate-cache"
+#DL_DIR = "/home/yean/code/downloads"
+#SSTATE_DIR = "/home/yean/code/sstate-cache"
 
 # ==================== 国内镜像源 ====================
 # 使用国内镜像加速源码下载（中科院软件所镜像站）
