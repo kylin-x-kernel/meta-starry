@@ -60,6 +60,7 @@ SRC_URI = "\
     git://${STARRY_GITHUB}/axplat-aarch64-crosvm-virt.git;protocol=https;branch=main;destsuffix=git/local_crates/axplat-aarch64-crosvm-virt;name=crosvm \
     git://${STARRY_GITHUB}/fdtree-rs.git;protocol=https;branch=main;destsuffix=git/local_crates/fdtree-rs;name=fdtree \
     git://${STARRY_GITHUB}/arm-gic.git;protocol=https;branch=main;destsuffix=git/local_crates/arm-gic;name=armgic \
+    git://${STARRY_GITHUB}/page_table_multiarch.git;protocol=https;branch=dev;name=page_table_multiarch \
     file://0001-use-stable-rust-toolchain.patch \
 "
 
@@ -71,9 +72,69 @@ SRCREV_axplat = "3000f4d52024a303261ccd1adef379684e2a9535"
 SRCREV_crosvm = "3b9ef2651d840ab2ea4e57d16881c16d6aa8e3a8"
 SRCREV_fdtree = "d69bcb0e04176a1c9863cb0f8951b755e45f4a4a"
 SRCREV_armgic = "35bfb52d71f8e73344178c0537b918b8660b2305"
+SRCREV_page_table_multiarch = "01df8185b2eb600525b810ca5817db73bb10199d"
 SRCREV_FORMAT = "starry_arceos"
 
 S = "${WORKDIR}/git"
+
+# ==================== 本地开发路径配置 ====================
+# 优先使用本地路径（EXTERNALSRC），如果未配置则使用 SRC_URI 下载
+# 在 local.conf 中设置以下变量启用本地开发模式
+
+STARRY_LOCAL_PATH ?= ""
+ARCEOS_LOCAL_PATH ?= ""
+AXDRIVER_LOCAL_PATH ?= ""
+AXPLAT_LOCAL_PATH ?= ""
+ARMGIC_LOCAL_PATH ?= ""
+FDTREE_LOCAL_PATH ?= ""
+CROSVM_PLAT_LOCAL_PATH ?= ""
+PAGE_TABLE_LOCAL_PATH ?= ""
+AXCPU_LOCAL_PATH ?= ""
+KERNEL_GUARD_LOCAL_PATH ?= ""
+
+python __anonymous() {
+    import os
+    
+    builddir = d.getVar('TOPDIR')
+    workspace_root = os.path.abspath(os.path.join(builddir, '..'))
+    
+    if os.path.exists(os.path.join(workspace_root, '.repo')):
+        bb.note("=" * 60)
+        bb.note("检测到 repo 工作区，启用 EXTERNALSRC 本地开发模式")
+        
+        repos = {
+            'STARRY_LOCAL_PATH': 'StarryOS',
+            'ARCEOS_LOCAL_PATH': 'arceos',
+            'AXDRIVER_LOCAL_PATH': 'axdriver_crates',
+            'AXPLAT_LOCAL_PATH': 'axplat_crates',
+            'ARMGIC_LOCAL_PATH': 'arm-gic',
+            'FDTREE_LOCAL_PATH': 'fdtree-rs',
+            'CROSVM_PLAT_LOCAL_PATH': 'axplat-aarch64-crosvm-virt',
+            'PAGE_TABLE_LOCAL_PATH': 'page_table_multiarch',
+            'AXCPU_LOCAL_PATH': 'axcpu',
+            'KERNEL_GUARD_LOCAL_PATH': 'kernel_guard',
+        }
+        
+        for var_name, repo_name in repos.items():
+            current_value = d.getVar(var_name)
+            if not current_value:
+                repo_path = os.path.join(workspace_root, repo_name)
+                if os.path.isdir(repo_path):
+                    d.setVar(var_name, repo_path)
+                    bb.note(f"  {repo_name}: {repo_path}")
+            else:
+                bb.note(f"  {repo_name}: {current_value} (用户覆盖)")
+        
+        bb.note("=" * 60)
+    
+    starry_path = d.getVar('STARRY_LOCAL_PATH')
+    if starry_path and os.path.isdir(starry_path):
+        d.setVar('EXTERNALSRC', starry_path)
+        d.setVar('EXTERNALSRC_BUILD', starry_path)
+        bb.note(f"使用本地源码: {starry_path}")
+    else:
+        bb.note("使用 SRC_URI 从远程下载源码")
+}
 
 # ==================== 平台兼容性 ====================
 COMPATIBLE_MACHINE = "(aarch64-qemu-virt|riscv64-qemu-virt|loongarch64-qemu-virt|x86_64-qemu-q35)"
@@ -99,10 +160,77 @@ ARCEOS_EXTRA_FEATURES ?= "axfeat/dwarf"
 require starry-targets.inc
 
 # ==================== Cargo.toml 补丁 ====================
-# 替换 git 依赖为本地路径
 do_configure:prepend() {
+    if [ -n "${EXTERNALSRC}" ]; then
+        bbnote "EXTERNALSRC 模式：创建本地依赖符号链接"
+        
+        if [ -n "${ARCEOS_LOCAL_PATH}" ] && [ -d "${ARCEOS_LOCAL_PATH}" ]; then
+            rm -rf ${S}/arceos
+            ln -sf ${ARCEOS_LOCAL_PATH} ${S}/arceos
+            bbnote "  arceos -> ${ARCEOS_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${AXDRIVER_LOCAL_PATH}" ] && [ -d "${AXDRIVER_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/axdriver_crates
+            ln -sf ${AXDRIVER_LOCAL_PATH} ${S}/local_crates/axdriver_crates
+            bbnote "  axdriver_crates -> ${AXDRIVER_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${AXPLAT_LOCAL_PATH}" ] && [ -d "${AXPLAT_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/axplat_crates
+            ln -sf ${AXPLAT_LOCAL_PATH} ${S}/local_crates/axplat_crates
+            bbnote "  axplat_crates -> ${AXPLAT_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${ARMGIC_LOCAL_PATH}" ] && [ -d "${ARMGIC_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/arm-gic
+            ln -sf ${ARMGIC_LOCAL_PATH} ${S}/local_crates/arm-gic
+            bbnote "  arm-gic -> ${ARMGIC_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${FDTREE_LOCAL_PATH}" ] && [ -d "${FDTREE_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/fdtree-rs
+            ln -sf ${FDTREE_LOCAL_PATH} ${S}/local_crates/fdtree-rs
+            bbnote "  fdtree-rs -> ${FDTREE_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${CROSVM_PLAT_LOCAL_PATH}" ] && [ -d "${CROSVM_PLAT_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/axplat-aarch64-crosvm-virt
+            ln -sf ${CROSVM_PLAT_LOCAL_PATH} ${S}/local_crates/axplat-aarch64-crosvm-virt
+            bbnote "  axplat-aarch64-crosvm-virt -> ${CROSVM_PLAT_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${PAGE_TABLE_LOCAL_PATH}" ] && [ -d "${PAGE_TABLE_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/page_table_multiarch
+            ln -sf ${PAGE_TABLE_LOCAL_PATH} ${S}/local_crates/page_table_multiarch
+            bbnote "  page_table_multiarch -> ${PAGE_TABLE_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${AXCPU_LOCAL_PATH}" ] && [ -d "${AXCPU_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/axcpu
+            ln -sf ${AXCPU_LOCAL_PATH} ${S}/local_crates/axcpu
+            bbnote "  axcpu -> ${AXCPU_LOCAL_PATH}"
+        fi
+        
+        if [ -n "${KERNEL_GUARD_LOCAL_PATH}" ] && [ -d "${KERNEL_GUARD_LOCAL_PATH}" ]; then
+            mkdir -p ${S}/local_crates
+            rm -rf ${S}/local_crates/kernel_guard
+            ln -sf ${KERNEL_GUARD_LOCAL_PATH} ${S}/local_crates/kernel_guard
+            bbnote "  kernel_guard -> ${KERNEL_GUARD_LOCAL_PATH}"
+        fi
+        
+        return
+    fi
+    
     if ! grep -q "# BitBake patch configuration" ${S}/Cargo.toml; then
-        bbnote "Patching Cargo.toml to use local crates..."
+        bbnote "SRC_URI 模式：修改 Cargo.toml 使用下载的依赖"
         cat >> ${S}/Cargo.toml << 'EOF'
 
 # BitBake patch configuration - replace git dependencies with local paths
