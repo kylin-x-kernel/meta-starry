@@ -22,9 +22,7 @@ SECTION = "kernel"
 LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=175792518e4ac015ab6696d16c4f607e"
 
-# ==================== 继承构建类 ====================
-# arceos-features 继承 arceos，arceos 继承 rust-kernel
-inherit arceos-features deploy
+inherit arceos-features deploy externalsrc
 
 # ==================== 内核提供 ====================
 # 提供虚拟内核，供 image 配方使用
@@ -32,11 +30,9 @@ PROVIDES += "virtual/kernel"
 KERNEL_IMAGETYPE = "bin"
 KERNEL_IMAGEDEST = "boot"
 
-# ==================== Bare-metal 内核打包策略 ====================
 PACKAGES = ""
 ALLOW_EMPTY:${PN} = "1"
 
-# 禁用 RPM/DEB/IPK 打包任务
 deltask do_package
 deltask do_package_write_rpm
 deltask do_package_write_ipk
@@ -47,39 +43,41 @@ deltask do_package_qa
 # ==================== 清空内核模块依赖 ====================
 KERNELDEPMODDEPEND = ""
 
-# ==================== 版本与源码 ====================
-PV = "1.0+git${SRCPV}"
+# ==================== 版本 ====================
+# 默认版本，会在 python __anonymous() 块中更新
+PV = "1.0+git"
 
-STARRY_GITHUB = "github.com/kylin-x-kernel"
-
-SRC_URI = "\
-    git://${STARRY_GITHUB}/StarryOS.git;protocol=https;branch=main;name=starry \
-    git://${STARRY_GITHUB}/arceos.git;protocol=https;branch=dev;destsuffix=git/arceos;name=arceos \
-    git://${STARRY_GITHUB}/axdriver_crates.git;protocol=https;branch=dev;destsuffix=git/local_crates/axdriver_crates;name=axdriver \
-    git://${STARRY_GITHUB}/axplat_crates.git;protocol=https;branch=dev;destsuffix=git/local_crates/axplat_crates;name=axplat \
-    git://${STARRY_GITHUB}/axplat-aarch64-crosvm-virt.git;protocol=https;branch=main;destsuffix=git/local_crates/axplat-aarch64-crosvm-virt;name=crosvm \
-    git://${STARRY_GITHUB}/fdtree-rs.git;protocol=https;branch=main;destsuffix=git/local_crates/fdtree-rs;name=fdtree \
-    git://${STARRY_GITHUB}/arm-gic.git;protocol=https;branch=main;destsuffix=git/local_crates/arm-gic;name=armgic \
-    git://${STARRY_GITHUB}/page_table_multiarch.git;protocol=https;branch=dev;name=page_table_multiarch \
-    file://0001-use-stable-rust-toolchain.patch \
-"
-
-# 固定 commit hash 
-SRCREV_starry = "210fa36a628813e06d5419709e1b42ea371e9e25"
-SRCREV_arceos = "eb7a020b7d9e2c506998c6dd8f1325df3e2bdc6d"
-SRCREV_axdriver = "43feffe8b054984471544d423811e686179ec3ad"
-SRCREV_axplat = "3000f4d52024a303261ccd1adef379684e2a9535"
-SRCREV_crosvm = "3b9ef2651d840ab2ea4e57d16881c16d6aa8e3a8"
-SRCREV_fdtree = "d69bcb0e04176a1c9863cb0f8951b755e45f4a4a"
-SRCREV_armgic = "35bfb52d71f8e73344178c0537b918b8660b2305"
-SRCREV_page_table_multiarch = "01df8185b2eb600525b810ca5817db73bb10199d"
-SRCREV_FORMAT = "starry_arceos"
-
-S = "${WORKDIR}/git"
+python __anonymous() {
+    import os
+    import subprocess
+    
+    # 获取 StarryOS 路径
+    starry_path = d.getVar('STARRY_LOCAL_PATH') or d.getVar('EXTERNALSRC')
+    if not starry_path or not os.path.isdir(starry_path):
+        return
+    
+    # 检查是否是 Git 仓库
+    git_dir = os.path.join(starry_path, '.git')
+    if not os.path.exists(git_dir):
+        return
+    
+    try:
+        # 获取当前 commit 的短 hash（7 位）
+        result = subprocess.run(
+            ['git', 'rev-parse', '--short=7', 'HEAD'],
+            cwd=starry_path,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            commit_hash = result.stdout.strip()
+            d.setVar('PV', "1.0+git" + commit_hash)
+    except Exception as e:
+        bb.note(f"无法获取 Git 版本信息: {e}")
+}
 
 # ==================== 本地开发路径配置 ====================
-# 优先使用本地路径（EXTERNALSRC），如果未配置则使用 SRC_URI 下载
-# 在 local.conf 中设置以下变量启用本地开发模式
 
 STARRY_LOCAL_PATH ?= ""
 ARCEOS_LOCAL_PATH ?= ""
@@ -102,9 +100,20 @@ python __anonymous() {
         bb.note("=" * 60)
         bb.note("检测到 repo 工作区，启用 EXTERNALSRC 本地开发模式")
         
+        # StarryOS 主仓库路径
+        starry_path = os.path.join(workspace_root, 'StarryOS')
+        if os.path.isdir(starry_path):
+            d.setVar('STARRY_LOCAL_PATH', starry_path)
+            bb.note(f"  StarryOS: {starry_path}")
+        
+        # arceos 在 StarryOS/arceos/（不在 local_crates/ 下）
+        arceos_path = os.path.join(workspace_root, 'StarryOS', 'arceos')
+        if os.path.isdir(arceos_path):
+            d.setVar('ARCEOS_LOCAL_PATH', arceos_path)
+            bb.note(f"  arceos: {arceos_path}")
+        
+        # 其他依赖仓库都在 StarryOS/local_crates/ 目录下
         repos = {
-            'STARRY_LOCAL_PATH': 'StarryOS',
-            'ARCEOS_LOCAL_PATH': 'arceos',
             'AXDRIVER_LOCAL_PATH': 'axdriver_crates',
             'AXPLAT_LOCAL_PATH': 'axplat_crates',
             'ARMGIC_LOCAL_PATH': 'arm-gic',
@@ -118,7 +127,7 @@ python __anonymous() {
         for var_name, repo_name in repos.items():
             current_value = d.getVar(var_name)
             if not current_value:
-                repo_path = os.path.join(workspace_root, repo_name)
+                repo_path = os.path.join(workspace_root, 'StarryOS', 'local_crates', repo_name)
                 if os.path.isdir(repo_path):
                     d.setVar(var_name, repo_path)
                     bb.note(f"  {repo_name}: {repo_path}")
@@ -127,13 +136,21 @@ python __anonymous() {
         
         bb.note("=" * 60)
     
+    # 设置 EXTERNALSRC
     starry_path = d.getVar('STARRY_LOCAL_PATH')
     if starry_path and os.path.isdir(starry_path):
         d.setVar('EXTERNALSRC', starry_path)
         d.setVar('EXTERNALSRC_BUILD', starry_path)
+        d.setVar('S', starry_path)
+        
+        license_file = os.path.join(starry_path, 'LICENSE')
+        if os.path.isfile(license_file):
+            d.setVar('LIC_FILES_CHKSUM', f'file://{license_file};md5=175792518e4ac015ab6696d16c4f607e')
+        
         bb.note(f"使用本地源码: {starry_path}")
+        bb.note(f"S = {starry_path}")
     else:
-        bb.note("使用 SRC_URI 从远程下载源码")
+        bb.fatal("STARRY_LOCAL_PATH 未设置或路径不存在。请在 local.conf 中设置 EXTERNALSRC_pn-starry 或 STARRY_LOCAL_PATH")
 }
 
 # ==================== 平台兼容性 ====================
@@ -156,89 +173,9 @@ ARCEOS_APP_FEATURES ?= "qemu"
 # axfeat/dwarf 会启用 axbacktrace/dwarf，在 panic 时显示堆栈
 ARCEOS_EXTRA_FEATURES ?= "axfeat/dwarf"
 
-# 引入多目标配置
 require starry-targets.inc
 
-# ==================== Cargo.toml 补丁 ====================
-do_configure:prepend() {
-    if [ -n "${EXTERNALSRC}" ]; then
-        bbnote "EXTERNALSRC 模式：创建本地依赖符号链接"
-        
-        if [ -n "${ARCEOS_LOCAL_PATH}" ] && [ -d "${ARCEOS_LOCAL_PATH}" ]; then
-            rm -rf ${S}/arceos
-            ln -sf ${ARCEOS_LOCAL_PATH} ${S}/arceos
-            bbnote "  arceos -> ${ARCEOS_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${AXDRIVER_LOCAL_PATH}" ] && [ -d "${AXDRIVER_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/axdriver_crates
-            ln -sf ${AXDRIVER_LOCAL_PATH} ${S}/local_crates/axdriver_crates
-            bbnote "  axdriver_crates -> ${AXDRIVER_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${AXPLAT_LOCAL_PATH}" ] && [ -d "${AXPLAT_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/axplat_crates
-            ln -sf ${AXPLAT_LOCAL_PATH} ${S}/local_crates/axplat_crates
-            bbnote "  axplat_crates -> ${AXPLAT_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${ARMGIC_LOCAL_PATH}" ] && [ -d "${ARMGIC_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/arm-gic
-            ln -sf ${ARMGIC_LOCAL_PATH} ${S}/local_crates/arm-gic
-            bbnote "  arm-gic -> ${ARMGIC_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${FDTREE_LOCAL_PATH}" ] && [ -d "${FDTREE_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/fdtree-rs
-            ln -sf ${FDTREE_LOCAL_PATH} ${S}/local_crates/fdtree-rs
-            bbnote "  fdtree-rs -> ${FDTREE_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${CROSVM_PLAT_LOCAL_PATH}" ] && [ -d "${CROSVM_PLAT_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/axplat-aarch64-crosvm-virt
-            ln -sf ${CROSVM_PLAT_LOCAL_PATH} ${S}/local_crates/axplat-aarch64-crosvm-virt
-            bbnote "  axplat-aarch64-crosvm-virt -> ${CROSVM_PLAT_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${PAGE_TABLE_LOCAL_PATH}" ] && [ -d "${PAGE_TABLE_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/page_table_multiarch
-            ln -sf ${PAGE_TABLE_LOCAL_PATH} ${S}/local_crates/page_table_multiarch
-            bbnote "  page_table_multiarch -> ${PAGE_TABLE_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${AXCPU_LOCAL_PATH}" ] && [ -d "${AXCPU_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/axcpu
-            ln -sf ${AXCPU_LOCAL_PATH} ${S}/local_crates/axcpu
-            bbnote "  axcpu -> ${AXCPU_LOCAL_PATH}"
-        fi
-        
-        if [ -n "${KERNEL_GUARD_LOCAL_PATH}" ] && [ -d "${KERNEL_GUARD_LOCAL_PATH}" ]; then
-            mkdir -p ${S}/local_crates
-            rm -rf ${S}/local_crates/kernel_guard
-            ln -sf ${KERNEL_GUARD_LOCAL_PATH} ${S}/local_crates/kernel_guard
-            bbnote "  kernel_guard -> ${KERNEL_GUARD_LOCAL_PATH}"
-        fi
-        
-        return
-    fi
-    
-    if ! grep -q "# BitBake patch configuration" ${S}/Cargo.toml; then
-        bbnote "SRC_URI 模式：修改 Cargo.toml 使用下载的依赖"
-        cat >> ${S}/Cargo.toml << 'EOF'
-
-# BitBake patch configuration - replace git dependencies with local paths
-[patch."https://github.com/kylin-x-kernel/arm-gic.git"]
-arm-gic = { path = "local_crates/arm-gic" }
-EOF
-    fi
-}
+# ==================== Cargo 配置 ====================
 
 # ==================== 安装 ====================
 #  build.mk 的后处理逻辑
@@ -292,7 +229,6 @@ do_install() {
             done
             eval $CMD
             
-            # 清理临时文件
             for section in $SECTIONS; do
                 rm -f $section.bin
             done

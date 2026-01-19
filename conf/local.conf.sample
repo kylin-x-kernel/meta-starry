@@ -51,23 +51,32 @@ INHERIT:remove = "sanity"
 #DL_DIR = "/home/yean/code/downloads"
 #SSTATE_DIR = "/home/yean/code/sstate-cache"
 
-# ==================== 本地开发路径配置 ====================
-# repo 工作区会自动检测并使用所有本地仓库（EXTERNALSRC 模式）
-# 如果需要覆盖某个仓库的路径，取消注释并修改：
-#
-# 注意：只有在 repo 工作区之外或需要使用不同路径时才需要配置
-# repo 工作区会自动设置这些路径，无需手动配置
 
-#STARRY_LOCAL_PATH = "/custom/path/to/StarryOS"
-#ARCEOS_LOCAL_PATH = "/custom/path/to/arceos"
-#AXDRIVER_LOCAL_PATH = "/custom/path/to/axdriver_crates"
-#AXPLAT_LOCAL_PATH = "/custom/path/to/axplat_crates"
-#ARMGIC_LOCAL_PATH = "/custom/path/to/arm-gic"
-#FDTREE_LOCAL_PATH = "/custom/path/to/fdtree-rs"
-#CROSVM_PLAT_LOCAL_PATH = "/custom/path/to/axplat-aarch64-crosvm-virt"
-#PAGE_TABLE_LOCAL_PATH = "/custom/path/to/page_table_multiarch"
-#AXCPU_LOCAL_PATH = "/custom/path/to/axcpu"
-#KERNEL_GUARD_LOCAL_PATH = "/custom/path/to/kernel_guard"
+# ==================== EXTERNALSRC 配置====================
+# 开启 EXTERNALSRC 后，Yocto 会直接使用本地源码目录编译
+# 
+# 注意：arceos 在 StarryOS/arceos/，其他依赖仓库在 StarryOS/local_crates/ 目录下
+EXTERNALSRC_pn-starry = "${HOME}/code/starryos-workspace/StarryOS"
+EXTERNALSRC_pn-arceos = "${HOME}/code/starryos-workspace/StarryOS/arceos"
+EXTERNALSRC_pn-axcpu = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axcpu"
+EXTERNALSRC_pn-arm-gic = "${HOME}/code/starryos-workspace/StarryOS/local_crates/arm-gic"
+EXTERNALSRC_pn-axplat_crates = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axplat_crates"
+EXTERNALSRC_pn-kernel_guard = "${HOME}/code/starryos-workspace/StarryOS/local_crates/kernel_guard"
+EXTERNALSRC_pn-fdtree-rs = "${HOME}/code/starryos-workspace/StarryOS/local_crates/fdtree-rs"
+EXTERNALSRC_pn-axdriver_crates = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axdriver_crates"
+EXTERNALSRC_pn-page_table_multiarch = "${HOME}/code/starryos-workspace/StarryOS/local_crates/page_table_multiarch"
+EXTERNALSRC_pn-axplat-aarch64-crosvm-virt = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axplat-aarch64-crosvm-virt"
+
+EXTERNALSRC_BUILD_pn-starry = "${EXTERNALSRC_pn-starry}"
+EXTERNALSRC_BUILD_pn-arceos = "${EXTERNALSRC_pn-arceos}"
+EXTERNALSRC_BUILD_pn-axcpu = "${EXTERNALSRC_pn-axcpu}"
+EXTERNALSRC_BUILD_pn-arm-gic = "${EXTERNALSRC_pn-arm-gic}"
+EXTERNALSRC_BUILD_pn-axplat_crates = "${EXTERNALSRC_pn-axplat_crates}"
+EXTERNALSRC_BUILD_pn-kernel_guard = "${EXTERNALSRC_pn-kernel_guard}"
+EXTERNALSRC_BUILD_pn-fdtree-rs = "${EXTERNALSRC_pn-fdtree-rs}"
+EXTERNALSRC_BUILD_pn-axdriver_crates = "${EXTERNALSRC_pn-axdriver_crates}"
+EXTERNALSRC_BUILD_pn-page_table_multiarch = "${EXTERNALSRC_pn-page_table_multiarch}"
+EXTERNALSRC_BUILD_pn-axplat-aarch64-crosvm-virt = "${EXTERNALSRC_pn-axplat-aarch64-crosvm-virt}"
 
 # ==================== 国内镜像源 ====================
 # 使用国内镜像加速源码下载（中科院软件所镜像站）
