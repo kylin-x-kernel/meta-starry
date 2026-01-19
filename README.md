@@ -24,9 +24,9 @@
 - **构建主机**: x86_64 或 aarch64
 - **磁盘空间**: 至少 100GB
 
-### 系统配置（首次使用必须）
+### 系统配置
 
-Ubuntu 24.04 需要调整内核参数：
+有的Ubuntu 24.04 需要调整内核参数：
 
 ```bash
 # 一键配置（复制整段执行）
@@ -316,38 +316,61 @@ SSTATE_DIR = "/mnt/shared/sstate-cache-${BUILD_ARCH}"
 
 ---
 
+## 本地开发模式
 
-## 目录结构
+### 自动检测（repo 工作区）
 
+repo 工作区会自动使用本地代码，无需配置：
+
+```bash
+cd ~/starryos-workspace
+repo sync
+source poky/oe-init-build-env build
+bitbake starry  
 ```
-meta-starry/
-├── classes/                     # BitBake 构建类
-│   ├── rust-kernel.bbclass
-│   ├── arceos.bbclass
-│   └── arceos-features.bbclass
-│
-├── conf/                        # 配置文件
-│   ├── distro/starryos.conf
-│   ├── machine/                 # 5 种架构配置
-│   └── local.conf.sample
-│
-├── recipes-kernel/              # 内核配方
-│   └── starryos/starry_git.bb
-│
-├── recipes-core/                # 核心配方
-│   ├── images/                  # 镜像配方
-│   └── packagegroups/           # 包组定义
-│
-├── recipes-devtools/            # 开发工具
-│   └── rust/                    # Rust 工具链
-│
-├── docs/                        # 详细文档
-│   ├── interfaces.md            # 接口说明
-│   ├── faq.md                   # 常见问题
-│   ├── team-sharing.md          # 团队协作
-│   └── ...
-│
-└── setup-layers                 # 环境设置脚本
+
+### 手动配置
+
+在 `build/conf/local.conf` 中设置：
+
+```bash
+# 只配置需要修改的仓库
+STARRY_LOCAL_PATH = "/path/to/your/StarryOS"
+ARCEOS_LOCAL_PATH = "/path/to/your/arceos"
+```
+
+支持的变量：`STARRY_LOCAL_PATH`、`ARCEOS_LOCAL_PATH`、`AXDRIVER_LOCAL_PATH`、`AXPLAT_LOCAL_PATH`、`ARMGIC_LOCAL_PATH`、`FDTREE_LOCAL_PATH`、`CROSVM_PLAT_LOCAL_PATH`、`PAGE_TABLE_LOCAL_PATH`、`AXCPU_LOCAL_PATH`、`KERNEL_GUARD_LOCAL_PATH`
+
+### 添加新仓库
+
+修改 `meta-starry/recipes-kernel/starryos/starry_git.bb`：
+
+**1. 添加 SRC_URI**（第 55-65 行）：
+```python
+git://${STARRY_GITHUB}/new-repo.git;...;name=newrepo
+SRCREV_newrepo = "commit-hash"
+```
+
+**2. 添加本地路径变量**（第 84-93 行）：
+```python
+NEW_REPO_LOCAL_PATH ?= ""
+```
+
+**3. 添加到自动检测**（第 105-113 行）：
+```python
+'NEW_REPO_LOCAL_PATH': 'new-repo',
+```
+
+**4. 添加符号链接**（第 202-225 行，可选）：
+```bash
+if [ -n "${NEW_REPO_LOCAL_PATH}" ] && [ -d "${NEW_REPO_LOCAL_PATH}" ]; then
+    ln -sf ${NEW_REPO_LOCAL_PATH} ${S}/local_crates/new-repo
+fi
+```
+
+**5. 更新示例**（`meta-starry/conf/local.conf.sample`）：
+```bash
+#NEW_REPO_LOCAL_PATH = "/custom/path/to/new-repo"
 ```
 
 ---
