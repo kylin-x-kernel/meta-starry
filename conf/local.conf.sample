@@ -28,15 +28,6 @@ DISTRO = "starryos"
 # 调试信息: y/n (默认: y)
 #ARCEOS_DWARF = "y"
 
-# ==================== 镜像主机名 ====================
-# 自定义镜像的 hostname (默认为 MACHINE 名称)
-# 取消注释以设置自定义 hostname
-#hostname:pn-base-files = "starryos-test"
-
-# 动态主机名（虚拟机环境）
-# 取消注释以禁用默认 hostname，使用运行时动态分配
-#hostname:pn-base-files = ""
-
 # ==================== 并行构建 ====================
 # 根据你的 CPU 核心数调整
 BB_NUMBER_THREADS = "8"
@@ -52,31 +43,19 @@ INHERIT:remove = "sanity"
 #SSTATE_DIR = "/home/yean/code/sstate-cache"
 
 
-# ==================== EXTERNALSRC 配置====================
-# 开启 EXTERNALSRC 后，Yocto 会直接使用本地源码目录编译
-# 
-# 注意：arceos 在 StarryOS/arceos/，其他依赖仓库在 StarryOS/local_crates/ 目录下
-EXTERNALSRC_pn-starry = "${HOME}/code/starryos-workspace/StarryOS"
-EXTERNALSRC_pn-arceos = "${HOME}/code/starryos-workspace/StarryOS/arceos"
-EXTERNALSRC_pn-axcpu = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axcpu"
-EXTERNALSRC_pn-arm-gic = "${HOME}/code/starryos-workspace/StarryOS/local_crates/arm-gic"
-EXTERNALSRC_pn-axplat_crates = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axplat_crates"
-EXTERNALSRC_pn-kernel_guard = "${HOME}/code/starryos-workspace/StarryOS/local_crates/kernel_guard"
-EXTERNALSRC_pn-fdtree-rs = "${HOME}/code/starryos-workspace/StarryOS/local_crates/fdtree-rs"
-EXTERNALSRC_pn-axdriver_crates = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axdriver_crates"
-EXTERNALSRC_pn-page_table_multiarch = "${HOME}/code/starryos-workspace/StarryOS/local_crates/page_table_multiarch"
-EXTERNALSRC_pn-axplat-aarch64-crosvm-virt = "${HOME}/code/starryos-workspace/StarryOS/local_crates/axplat-aarch64-crosvm-virt"
-
-EXTERNALSRC_BUILD_pn-starry = "${EXTERNALSRC_pn-starry}"
-EXTERNALSRC_BUILD_pn-arceos = "${EXTERNALSRC_pn-arceos}"
-EXTERNALSRC_BUILD_pn-axcpu = "${EXTERNALSRC_pn-axcpu}"
-EXTERNALSRC_BUILD_pn-arm-gic = "${EXTERNALSRC_pn-arm-gic}"
-EXTERNALSRC_BUILD_pn-axplat_crates = "${EXTERNALSRC_pn-axplat_crates}"
-EXTERNALSRC_BUILD_pn-kernel_guard = "${EXTERNALSRC_pn-kernel_guard}"
-EXTERNALSRC_BUILD_pn-fdtree-rs = "${EXTERNALSRC_pn-fdtree-rs}"
-EXTERNALSRC_BUILD_pn-axdriver_crates = "${EXTERNALSRC_pn-axdriver_crates}"
-EXTERNALSRC_BUILD_pn-page_table_multiarch = "${EXTERNALSRC_pn-page_table_multiarch}"
-EXTERNALSRC_BUILD_pn-axplat-aarch64-crosvm-virt = "${EXTERNALSRC_pn-axplat-aarch64-crosvm-virt}"
+# ==================== EXTERNALSRC 配置 ====================
+# 说明：
+#   1. 如果使用 repo 管理多仓（推荐），starry_git.bb 会自动检测 .repo/ 目录
+#      并启用 EXTERNALSRC，无需手动配置
+#
+#   2. 如果需要覆盖自动检测（如使用不同路径），可手动设置：
+#      EXTERNALSRC_pn-starry = "/path/to/your/StarryOS"
+#      EXTERNALSRC_BUILD_pn-starry = "${EXTERNALSRC_pn-starry}"
+#
+#
+# 示例：
+#EXTERNALSRC_pn-starry = "/home/yean/code/my-custom-starryos"
+#EXTERNALSRC_BUILD_pn-starry = "${EXTERNALSRC_pn-starry}"
 
 # ==================== 国内镜像源 ====================
 # 使用国内镜像加速源码下载（中科院软件所镜像站）

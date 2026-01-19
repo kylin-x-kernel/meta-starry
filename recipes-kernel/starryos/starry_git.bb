@@ -43,114 +43,72 @@ deltask do_package_qa
 # ==================== 清空内核模块依赖 ====================
 KERNELDEPMODDEPEND = ""
 
-# ==================== 版本 ====================
-# 默认版本，会在 python __anonymous() 块中更新
-PV = "1.0+git"
-
 python __anonymous() {
     import os
     import subprocess
     
-    # 获取 StarryOS 路径
-    starry_path = d.getVar('STARRY_LOCAL_PATH') or d.getVar('EXTERNALSRC')
-    if not starry_path or not os.path.isdir(starry_path):
-        return
-    
-    # 检查是否是 Git 仓库
-    git_dir = os.path.join(starry_path, '.git')
-    if not os.path.exists(git_dir):
-        return
-    
-    try:
-        # 获取当前 commit 的短 hash（7 位）
-        result = subprocess.run(
-            ['git', 'rev-parse', '--short=7', 'HEAD'],
-            cwd=starry_path,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            commit_hash = result.stdout.strip()
-            d.setVar('PV', "1.0+git" + commit_hash)
-    except Exception as e:
-        bb.note(f"无法获取 Git 版本信息: {e}")
-}
-
-# ==================== 本地开发路径配置 ====================
-
-STARRY_LOCAL_PATH ?= ""
-ARCEOS_LOCAL_PATH ?= ""
-AXDRIVER_LOCAL_PATH ?= ""
-AXPLAT_LOCAL_PATH ?= ""
-ARMGIC_LOCAL_PATH ?= ""
-FDTREE_LOCAL_PATH ?= ""
-CROSVM_PLAT_LOCAL_PATH ?= ""
-PAGE_TABLE_LOCAL_PATH ?= ""
-AXCPU_LOCAL_PATH ?= ""
-KERNEL_GUARD_LOCAL_PATH ?= ""
-
-python __anonymous() {
-    import os
-    
     builddir = d.getVar('TOPDIR')
     workspace_root = os.path.abspath(os.path.join(builddir, '..'))
     
-    if os.path.exists(os.path.join(workspace_root, '.repo')):
-        bb.note("=" * 60)
-        bb.note("检测到 repo 工作区，启用 EXTERNALSRC 本地开发模式")
+    # 1. 优先使用用户配置的 EXTERNALSRC
+    user_externalsrc = d.getVar('EXTERNALSRC')
+    if user_externalsrc:
+        bb.note(f"使用用户配置的 EXTERNALSRC: {user_externalsrc}")
+        d.setVar('S', user_externalsrc)
+        d.setVar('B', user_externalsrc)
         
-        # StarryOS 主仓库路径
-        starry_path = os.path.join(workspace_root, 'StarryOS')
-        if os.path.isdir(starry_path):
-            d.setVar('STARRY_LOCAL_PATH', starry_path)
-            bb.note(f"  StarryOS: {starry_path}")
-        
-        # arceos 在 StarryOS/arceos/（不在 local_crates/ 下）
-        arceos_path = os.path.join(workspace_root, 'StarryOS', 'arceos')
-        if os.path.isdir(arceos_path):
-            d.setVar('ARCEOS_LOCAL_PATH', arceos_path)
-            bb.note(f"  arceos: {arceos_path}")
-        
-        # 其他依赖仓库都在 StarryOS/local_crates/ 目录下
-        repos = {
-            'AXDRIVER_LOCAL_PATH': 'axdriver_crates',
-            'AXPLAT_LOCAL_PATH': 'axplat_crates',
-            'ARMGIC_LOCAL_PATH': 'arm-gic',
-            'FDTREE_LOCAL_PATH': 'fdtree-rs',
-            'CROSVM_PLAT_LOCAL_PATH': 'axplat-aarch64-crosvm-virt',
-            'PAGE_TABLE_LOCAL_PATH': 'page_table_multiarch',
-            'AXCPU_LOCAL_PATH': 'axcpu',
-            'KERNEL_GUARD_LOCAL_PATH': 'kernel_guard',
-        }
-        
-        for var_name, repo_name in repos.items():
-            current_value = d.getVar(var_name)
-            if not current_value:
-                repo_path = os.path.join(workspace_root, 'StarryOS', 'local_crates', repo_name)
-                if os.path.isdir(repo_path):
-                    d.setVar(var_name, repo_path)
-                    bb.note(f"  {repo_name}: {repo_path}")
-            else:
-                bb.note(f"  {repo_name}: {current_value} (用户覆盖)")
-        
-        bb.note("=" * 60)
-    
-    # 设置 EXTERNALSRC
-    starry_path = d.getVar('STARRY_LOCAL_PATH')
-    if starry_path and os.path.isdir(starry_path):
-        d.setVar('EXTERNALSRC', starry_path)
-        d.setVar('EXTERNALSRC_BUILD', starry_path)
-        d.setVar('S', starry_path)
-        
-        license_file = os.path.join(starry_path, 'LICENSE')
+        license_file = os.path.join(user_externalsrc, 'LICENSE')
         if os.path.isfile(license_file):
             d.setVar('LIC_FILES_CHKSUM', f'file://{license_file};md5=175792518e4ac015ab6696d16c4f607e')
         
-        bb.note(f"使用本地源码: {starry_path}")
-        bb.note(f"S = {starry_path}")
-    else:
-        bb.fatal("STARRY_LOCAL_PATH 未设置或路径不存在。请在 local.conf 中设置 EXTERNALSRC_pn-starry 或 STARRY_LOCAL_PATH")
+        # 动态版本
+        git_dir = os.path.join(user_externalsrc, '.git')
+        if os.path.exists(git_dir):
+            try:
+                result = subprocess.run(['git', 'rev-parse', '--short=7', 'HEAD'],
+                    cwd=user_externalsrc, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and result.stdout.strip():
+                    d.setVar('PV', "1.0+git" + result.stdout.strip())
+            except:
+                pass
+        return
+    
+    # 2. 自动检测 repo 工作区
+    if not os.path.exists(os.path.join(workspace_root, '.repo')):
+        bb.fatal("未检测到 repo 工作区，且 EXTERNALSRC_pn-starry 未设置。请在 local.conf 中配置 EXTERNALSRC_pn-starry")
+        return
+    
+    bb.note("=" * 60)
+    bb.note("检测到 repo 工作区，启用 EXTERNALSRC 本地开发模式")
+    
+    starry_path = os.path.join(workspace_root, 'StarryOS')
+    if not os.path.isdir(starry_path):
+        bb.fatal(f"StarryOS 目录不存在: {starry_path}")
+        return
+    
+    bb.note(f"  StarryOS: {starry_path}")
+    d.setVar('EXTERNALSRC', starry_path)
+    d.setVar('EXTERNALSRC_BUILD', starry_path)
+    d.setVar('S', starry_path)
+    d.setVar('B', starry_path)
+    
+    # LICENSE
+    license_file = os.path.join(starry_path, 'LICENSE')
+    if os.path.isfile(license_file):
+        d.setVar('LIC_FILES_CHKSUM', f'file://{license_file};md5=175792518e4ac015ab6696d16c4f607e')
+    
+    # 动态版本
+    git_dir = os.path.join(starry_path, '.git')
+    if os.path.exists(git_dir):
+        try:
+            result = subprocess.run(['git', 'rev-parse', '--short=7', 'HEAD'],
+                cwd=starry_path, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                d.setVar('PV', "1.0+git" + result.stdout.strip())
+        except:
+            pass
+    
+    bb.note("=" * 60)
 }
 
 # ==================== 平台兼容性 ====================
