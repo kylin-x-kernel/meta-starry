@@ -94,6 +94,8 @@ do_configure[noexec] = "1"
 do_compile[noexec] = "1"
 do_fetch[network] = "1"
 
+do_unpack[depends] += "xz-native:do_populate_sysroot"
+
 # ==================== 安装逻辑 ====================
 do_install() {
     TOOLCHAIN_DIR="${S}/rust-${RUST_CHANNEL}-${RUST_HOST}"

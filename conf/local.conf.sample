@@ -28,15 +28,6 @@ DISTRO = "starryos"
 # 调试信息: y/n (默认: y)
 #ARCEOS_DWARF = "y"
 
-# ==================== 镜像主机名 ====================
-# 自定义镜像的 hostname (默认为 MACHINE 名称)
-# 取消注释以设置自定义 hostname
-#hostname:pn-base-files = "starryos-test"
-
-# 动态主机名（虚拟机环境）
-# 取消注释以禁用默认 hostname，使用运行时动态分配
-#hostname:pn-base-files = ""
-
 # ==================== 并行构建 ====================
 # 根据你的 CPU 核心数调整
 BB_NUMBER_THREADS = "8"
@@ -51,23 +42,20 @@ INHERIT:remove = "sanity"
 #DL_DIR = "/home/yean/code/downloads"
 #SSTATE_DIR = "/home/yean/code/sstate-cache"
 
-# ==================== 本地开发路径配置 ====================
-# repo 工作区会自动检测并使用所有本地仓库（EXTERNALSRC 模式）
-# 如果需要覆盖某个仓库的路径，取消注释并修改：
-#
-# 注意：只有在 repo 工作区之外或需要使用不同路径时才需要配置
-# repo 工作区会自动设置这些路径，无需手动配置
 
-#STARRY_LOCAL_PATH = "/custom/path/to/StarryOS"
-#ARCEOS_LOCAL_PATH = "/custom/path/to/arceos"
-#AXDRIVER_LOCAL_PATH = "/custom/path/to/axdriver_crates"
-#AXPLAT_LOCAL_PATH = "/custom/path/to/axplat_crates"
-#ARMGIC_LOCAL_PATH = "/custom/path/to/arm-gic"
-#FDTREE_LOCAL_PATH = "/custom/path/to/fdtree-rs"
-#CROSVM_PLAT_LOCAL_PATH = "/custom/path/to/axplat-aarch64-crosvm-virt"
-#PAGE_TABLE_LOCAL_PATH = "/custom/path/to/page_table_multiarch"
-#AXCPU_LOCAL_PATH = "/custom/path/to/axcpu"
-#KERNEL_GUARD_LOCAL_PATH = "/custom/path/to/kernel_guard"
+# ==================== EXTERNALSRC 配置 ====================
+# 说明：
+#   1. 如果使用 repo 管理多仓（推荐），starry_git.bb 会自动检测 .repo/ 目录
+#      并启用 EXTERNALSRC，无需手动配置
+#
+#   2. 如果需要覆盖自动检测（如使用不同路径），可手动设置：
+#      EXTERNALSRC_pn-starry = "/path/to/your/StarryOS"
+#      EXTERNALSRC_BUILD_pn-starry = "${EXTERNALSRC_pn-starry}"
+#
+#
+# 示例：
+#EXTERNALSRC_pn-starry = "/home/yean/code/my-custom-starryos"
+#EXTERNALSRC_BUILD_pn-starry = "${EXTERNALSRC_pn-starry}"
 
 # ==================== 国内镜像源 ====================
 # 使用国内镜像加速源码下载（中科院软件所镜像站）
