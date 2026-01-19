@@ -61,16 +61,7 @@ python __anonymous() {
         if os.path.isfile(license_file):
             d.setVar('LIC_FILES_CHKSUM', f'file://{license_file};md5=175792518e4ac015ab6696d16c4f607e')
         
-        # 动态版本
-        git_dir = os.path.join(user_externalsrc, '.git')
-        if os.path.exists(git_dir):
-            try:
-                result = subprocess.run(['git', 'rev-parse', '--short=7', 'HEAD'],
-                    cwd=user_externalsrc, capture_output=True, text=True, timeout=5)
-                if result.returncode == 0 and result.stdout.strip():
-                    d.setVar('PV', "1.0+git" + result.stdout.strip())
-            except:
-                pass
+        d.setVar('PV', "1.0+gitDEV")
         return
     
     # 2. 自动检测 repo 工作区
@@ -97,19 +88,11 @@ python __anonymous() {
     if os.path.isfile(license_file):
         d.setVar('LIC_FILES_CHKSUM', f'file://{license_file};md5=175792518e4ac015ab6696d16c4f607e')
     
-    # 动态版本
-    git_dir = os.path.join(starry_path, '.git')
-    if os.path.exists(git_dir):
-        try:
-            result = subprocess.run(['git', 'rev-parse', '--short=7', 'HEAD'],
-                cwd=starry_path, capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip():
-                d.setVar('PV', "1.0+git" + result.stdout.strip())
-        except:
-            pass
-    
+    d.setVar('PV', "1.0+gitDEV")
     bb.note("=" * 60)
 }
+
+do_compile[nostamp] = "1"
 
 # ==================== 平台兼容性 ====================
 COMPATIBLE_MACHINE = "(aarch64-qemu-virt|riscv64-qemu-virt|loongarch64-qemu-virt|x86_64-qemu-q35)"
