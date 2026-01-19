@@ -55,7 +55,6 @@ python __anonymous() {
     if user_externalsrc:
         bb.note(f"使用用户配置的 EXTERNALSRC: {user_externalsrc}")
         d.setVar('S', user_externalsrc)
-        d.setVar('B', user_externalsrc)
         
         license_file = os.path.join(user_externalsrc, 'LICENSE')
         if os.path.isfile(license_file):
@@ -79,9 +78,7 @@ python __anonymous() {
     
     bb.note(f"  StarryOS: {starry_path}")
     d.setVar('EXTERNALSRC', starry_path)
-    d.setVar('EXTERNALSRC_BUILD', starry_path)
     d.setVar('S', starry_path)
-    d.setVar('B', starry_path)
     
     # LICENSE
     license_file = os.path.join(starry_path, 'LICENSE')
@@ -93,6 +90,15 @@ python __anonymous() {
 }
 
 do_compile[nostamp] = "1"
+
+
+do_clean[cleandirs] = ""
+do_cleansstate[cleandirs] = ""
+do_configure[cleandirs] = ""
+do_compile[cleandirs] = ""
+do_install[cleandirs] = ""
+
+do_cleansstate[noexec] = "1"
 
 # ==================== 平台兼容性 ====================
 COMPATIBLE_MACHINE = "(aarch64-qemu-virt|riscv64-qemu-virt|loongarch64-qemu-virt|x86_64-qemu-q35)"

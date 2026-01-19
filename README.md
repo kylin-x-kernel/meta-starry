@@ -45,7 +45,7 @@ sudo sysctl -p /etc/sysctl.d/99-yocto.conf
 ```bash
 mkdir -p ~/starry-workspace
 cd ~/starry-workspace
-git clone https://github.com/kylin-x-kernel/meta-starry.git
+git clone https://gitee.com/openkylin/meta-starry.git
 ```
 
 ### 2. 自动设置环境
