@@ -78,11 +78,6 @@ python __anonymous() {
 }
 
 do_compile[nostamp] = "1"
-
-# ==================== 保护源码目录 ====================
-# EXTERNALSRC 使用外部源码目录，必须禁用所有 cleandirs 防止源码被删除
-# 特别重要: do_unpack[cleandirs] 默认会清空 ${S} 目录!
-# 由于 anonymous 函数执行顺序不确定，externalsrc.bbclass 的保护可能失效
 do_clean[cleandirs] = ""
 do_cleansstate[cleandirs] = ""
 do_cleanall[cleandirs] = ""
@@ -93,7 +88,7 @@ do_fetch[cleandirs] = ""
 do_unpack[cleandirs] = ""
 do_patch[cleandirs] = ""
 
-# 禁用会删除源码的任务
+do_unpack[cleandirs] = ""
 do_cleansstate[noexec] = "1"
 do_cleanall[noexec] = "1"
 do_fetch[noexec] = "1"
