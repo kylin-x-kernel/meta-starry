@@ -45,7 +45,6 @@ KERNELDEPMODDEPEND = ""
 
 python __anonymous() {
     import os
-    import subprocess
     
     builddir = d.getVar('TOPDIR')
     workspace_root = os.path.abspath(os.path.join(builddir, '..'))
@@ -55,11 +54,6 @@ python __anonymous() {
     if user_externalsrc:
         bb.note(f"使用用户配置的 EXTERNALSRC: {user_externalsrc}")
         d.setVar('S', user_externalsrc)
-        
-        license_file = os.path.join(user_externalsrc, 'LICENSE')
-        if os.path.isfile(license_file):
-            d.setVar('LIC_FILES_CHKSUM', f'file://{license_file};md5=175792518e4ac015ab6696d16c4f607e')
-        
         d.setVar('PV', "1.0+gitDEV")
         return
     
@@ -79,12 +73,6 @@ python __anonymous() {
     bb.note(f"  StarryOS: {starry_path}")
     d.setVar('EXTERNALSRC', starry_path)
     d.setVar('S', starry_path)
-    
-    # LICENSE
-    license_file = os.path.join(starry_path, 'LICENSE')
-    if os.path.isfile(license_file):
-        d.setVar('LIC_FILES_CHKSUM', f'file://{license_file};md5=175792518e4ac015ab6696d16c4f607e')
-    
     d.setVar('PV', "1.0+gitDEV")
     bb.note("=" * 60)
 }
