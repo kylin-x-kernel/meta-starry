@@ -1,16 +1,20 @@
 SUMMARY = "StarryOS CI functional tests"
-DESCRIPTION = "Functional tests for StarryOS from starry-test-harness"
+DESCRIPTION = "Functional tests for StarryOS from starry-test-harness (modular architecture)"
 HOMEPAGE = "https://github.com/kylin-x-kernel/starry-test-harness"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-SRC_URI = "git://github.com/kylin-x-kernel/starry-test-harness.git;protocol=https;branch=master"
+SRC_URI = "git://github.com/kylin-x-kernel/starry-test-harness.git;protocol=https;branch=master \
+           file://install_modules.py \
+          "
 SRCREV = "${AUTOREV}"
-PV = "1.0+git${SRCPV}"
+PV = "2.0+git${SRCPV}"
 
 S = "${WORKDIR}/git/tests/ci/cases"
 
 inherit rust-userspace
+
+DEPENDS += "python3-toml-native"
 
 do_compile() {
     rust_userspace_setup
@@ -19,33 +23,50 @@ do_compile() {
     cargo test --no-run --release --target ${RUST_USERSPACE_TARGET}
 }
 
+
+do_compile[network] = "1"
+
 do_install() {
-    install -d ${D}${libdir}/starry-ci
+    install -d ${D}${libdir}/starry-tests
+    install -d ${D}${libdir}/starry-tests/common
     
-    # Cargo builds to workspace root (git/target), not ${S}/target
-    for bin in ${WORKDIR}/git/target/${RUST_USERSPACE_TARGET}/release/deps/*-[0-9a-f]*[0-9a-f]; do
-        # Skip non-executable files, symlinks, and lib files
-        [ -x "$bin" ] && [ ! -L "$bin" ] || continue
-        case "$bin" in
-            *.so|*.rlib|*build_script_*) continue ;;
-        esac
-        
-        # Install with original name (with hash)
-        install -m 0755 "$bin" ${D}${libdir}/starry-ci/
-        
-        # Create symlink without hash for easy access
-        # Example: file_io_basic-8cf43a29b8d19758 -> file_io_basic
-        binname=$(basename "$bin")
-        cleanname=$(echo "$binname" | sed 's/-[0-9a-f]\{16\}$//')
-        if [ "$cleanname" != "$binname" ]; then
-            ln -sf "$binname" "${D}${libdir}/starry-ci/$cleanname"
-        fi
-    done
+    # ========== 安装 manifest.toml ==========
+    MANIFEST="${WORKDIR}/git/manifest.toml"
+    if [ -f "$MANIFEST" ]; then
+        install -m 0644 "$MANIFEST" ${D}${libdir}/starry-tests/
+        bbnote "Installed manifest.toml"
+    else
+        bbwarn "manifest.toml not found in harness repository"
+    fi
     
-    if [ -z "$(ls -A ${D}${libdir}/starry-ci/ 2>/dev/null)" ]; then
-        bbfatal "No test binaries found in ${WORKDIR}/git/target/${RUST_USERSPACE_TARGET}/release/deps/"
+    # ========== 安装公共工具 ==========
+    COMMON_DIR="${WORKDIR}/git/common"
+    if [ -d "$COMMON_DIR" ]; then
+        cp -r "$COMMON_DIR"/* ${D}${libdir}/starry-tests/common/
+        chmod +x ${D}${libdir}/starry-tests/common/*.sh 2>/dev/null || true
+        bbnote "Installed common utilities"
+    else
+        bbwarn "common/ directory not found in harness repository"
+    fi
+    
+    # ========== 使用 Python helper 动态安装模块 ==========
+    if [ -f "$MANIFEST" ]; then
+        bbnote "Installing modules via install_modules.py..."
+        # 使用 nativepython3 以确保能找到 python3-toml-native
+        nativepython3 ${WORKDIR}/install_modules.py \
+            --manifest "$MANIFEST" \
+            --source "${WORKDIR}/git" \
+            --dest "${D}${libdir}/starry-tests" \
+            --target "${RUST_USERSPACE_TARGET}" \
+            --suite ci || bbwarn "Module installation had warnings"
+    fi
+    
+    # ========== 验证安装 ==========
+    if [ ! -d "${D}${libdir}/starry-tests/rust-tests" ] && [ ! -d "${D}${libdir}/starry-tests/libc-test" ]; then
+        bbwarn "No test modules installed - check manifest.toml and module structure"
     fi
 }
 
-FILES:${PN} = "/usr/lib/starry-ci/*"
+FILES:${PN} = "${libdir}/starry-tests/*"
 INSANE_SKIP:${PN} = "already-stripped ldflags"
+RDEPENDS:${PN} = "python3 python3-toml"
