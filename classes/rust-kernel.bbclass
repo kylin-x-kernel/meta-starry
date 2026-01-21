@@ -7,7 +7,7 @@
 # - No wrapper scripts - trust BitBake's environment export
 #
 # Provides:
-#   - Rust toolchain setup (rust-native + rust-std-{arch}-none-native)
+#   - Rust toolchain setup (rust-prebuilt-native with all target std libs)
 #   - Cargo environment configuration
 #   - Common build/install tasks for bare-metal kernels
 #
@@ -22,36 +22,9 @@
 #   CARGO_FEATURES - Cargo features to enable
 #   EXTRA_CARGO_FLAGS - Additional cargo flags
 # ==================== Dependencies ====================
-DEPENDS:append = " rust-native"
+DEPENDS:append = " rust-prebuilt-native"
 
 CLEANBROKEN = "1"
-
-# Dynamically add rust-std for target architecture
-python __anonymous() {
-    rust_provider = d.getVar('PREFERRED_PROVIDER_rust-native')
-    
-    if rust_provider == 'rust-prebuilt-native':
-        bb.note("Using rust-prebuilt-native (includes all target std libs)")
-        return
-    
-    arch = d.getVar('KERNEL_ARCH')
-    if not arch:
-        arch = d.getVar('TARGET_ARCH')
-    
-    if arch:
-        arch_map = {
-            'aarch64': 'rust-std-aarch64-none-native',
-            'riscv64': 'rust-std-riscv64-none-native',
-            'loongarch64': 'rust-std-loongarch64-none-native',
-            'x86_64': 'rust-std-x86_64-none-native',
-        }
-        
-        rust_std = arch_map.get(arch)
-        if rust_std:
-            d.appendVar('DEPENDS', f' {rust_std}')
-        else:
-            bb.warn(f"No rust-std package defined for architecture: {arch}")
-}
 
 # ==================== Packaging ====================
 PACKAGES = ""
@@ -77,22 +50,6 @@ export RUST_TARGET_TRIPLE = "${RUST_TARGET}"
 # This MUST be at metadata level for BitBake to properly export to child processes
 export RUSTC_BOOTSTRAP = "1"
 
-# Rust native toolchain paths
-# 支持 rust-native (从源码构建) 和 rust-prebuilt-native (预编译)
-# rust-prebuilt-native 优先
-python () {
-    components_dir = d.getVar('COMPONENTS_DIR')
-    build_arch = d.getVar('BUILD_ARCH')
-    
-    # 优先使用 rust-prebuilt-native
-    prebuilt_path = os.path.join(components_dir, build_arch, 'rust-prebuilt-native')
-    source_path = os.path.join(components_dir, build_arch, 'rust-native')
-    
-    if os.path.exists(os.path.join(prebuilt_path, 'usr', 'bin', 'rustc')):
-        d.setVar('RUST_NATIVE', prebuilt_path)
-    else:
-        d.setVar('RUST_NATIVE', source_path)
-}
 RUST_NATIVE ?= "${COMPONENTS_DIR}/${BUILD_ARCH}/rust-prebuilt-native"
 export PATH:prepend = "${RUST_NATIVE}/usr/bin:"
 export RUST_TARGET_PATH = "${RUST_NATIVE}/usr/lib/rustlib"
@@ -101,56 +58,21 @@ export RUST_TARGET_PATH = "${RUST_NATIVE}/usr/lib/rustlib"
 # Minimal setup: only verify and link std library
 # NO wrapper scripts, NO environment overrides
 rust_kernel_setup_toolchain() {
-    # 查找可用的 rust 工具链 (优先 rust-prebuilt-native)
-    local rust_prebuilt="${COMPONENTS_DIR}/${BUILD_ARCH}/rust-prebuilt-native"
-    local rust_source="${COMPONENTS_DIR}/${BUILD_ARCH}/rust-native"
-    local rust_native=""
+    # 使用 rust-prebuilt-native (预编译工具链，包含所有目标库)
+    local rust_toolchain="${RUST_NATIVE}"
     
-    if [ -x "${rust_prebuilt}/usr/bin/rustc" ]; then
-        rust_native="${rust_prebuilt}"
-        bbnote "Using rust-prebuilt-native"
-    elif [ -x "${rust_source}/usr/bin/rustc" ]; then
-        rust_native="${rust_source}"
-        bbnote "Using rust-native (built from source)"
-    else
-        bbfatal "No Rust toolchain found. Checked:\n  ${rust_prebuilt}\n  ${rust_source}"
+    bbnote "Using rust-prebuilt-native: ${rust_toolchain}"
+    
+    # 验证工具链
+    if [ ! -x "${rust_toolchain}/usr/bin/cargo" ]; then
+        bbfatal "cargo not found at ${rust_toolchain}/usr/bin/cargo"
+    fi
+    if [ ! -x "${rust_toolchain}/usr/bin/rustc" ]; then
+        bbfatal "rustc not found at ${rust_toolchain}/usr/bin/rustc"
     fi
     
-    # 导出工具链路径
-    export PATH="${rust_native}/usr/bin:${PATH}"
-    export RUST_TARGET_PATH="${rust_native}/usr/lib/rustlib"
-    
-    # Verify toolchain
-    if [ ! -x "${rust_native}/usr/bin/cargo" ]; then
-        bbfatal "cargo not found in rust-native at ${rust_native}/usr/bin/"
-    fi
-    if [ ! -x "${rust_native}/usr/bin/rustc" ]; then
-        bbfatal "rustc not found in rust-native at ${rust_native}/usr/bin/"
-    fi
-    
-    # 检查是否是 rust-prebuilt-native (所有目标库已包含)
-    if [ "${rust_native}" = "${rust_prebuilt}" ]; then
-        # rust-prebuilt-native: 所有 target 库已在正确位置
-        bbnote "All target libraries included in prebuilt toolchain"
-    else
-        # 从源码编译的 rust-native: 需要链接 rust-std
-    local target_rustlib="${rust_native}/usr/lib/rustlib/${RUST_TARGET}"
-    local kernel_arch="${KERNEL_ARCH:-${TARGET_ARCH}}"
-    local std_src="${COMPONENTS_DIR}/${BUILD_ARCH}/rust-std-${kernel_arch}-none-native/usr/lib/rustlib/${RUST_TARGET}"
-    
-    if [ ! -d "${target_rustlib}" ]; then
-        if [ ! -d "${std_src}" ]; then
-            bbfatal "Target ${RUST_TARGET} std library not found at ${std_src}"
-        fi
-        bbnote "Linking ${RUST_TARGET} std library into rust-native sysroot"
-        ln -sf "${std_src}" "${target_rustlib}"
-    fi
-    
-        bbnote "Using rust-native (built from source)"
-    fi
-    
-    # Verify target std library
-    local target_rustlib="${rust_native}/usr/lib/rustlib/${RUST_TARGET}"
+    # 验证目标库
+    local target_rustlib="${rust_toolchain}/usr/lib/rustlib/${RUST_TARGET}"
     if [ ! -d "${target_rustlib}/lib" ]; then
         bbfatal "Target ${RUST_TARGET} library directory not found: ${target_rustlib}/lib"
     fi
@@ -159,12 +81,12 @@ rust_kernel_setup_toolchain() {
         bbfatal "libcore not found for target ${RUST_TARGET} in ${target_rustlib}/lib/"
     fi
     
-    # Log configuration
+    # 日志输出
     bbnote "Rust toolchain configured:"
     bbnote "  RUSTC_BOOTSTRAP=${RUSTC_BOOTSTRAP}"
     bbnote "  RUST_TARGET_PATH=${RUST_TARGET_PATH}"
-    bbnote "  rustc: $(${rust_native}/usr/bin/rustc --version)"
-    bbnote "  cargo: $(${rust_native}/usr/bin/cargo --version)"
+    bbnote "  rustc: $(${rust_toolchain}/usr/bin/rustc --version)"
+    bbnote "  cargo: $(${rust_toolchain}/usr/bin/cargo --version)"
     bbnote "  target: ${RUST_TARGET}"
     bbnote "  target libs: ${target_rustlib}/lib/"
 }
