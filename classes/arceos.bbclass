@@ -37,6 +37,7 @@ DEPENDS:append = " \
     axconfig-gen-native \
     cargo-binutils-native \
     cmake-native \
+    clang-native \
 "
 
 # ==================== 变量声明 ====================
@@ -310,13 +311,33 @@ do_compile() {
     fi
     
     # LIBCLANG_PATH for bindgen (Rust FFI bindings generator)
-    # 使用 rust-prebuilt-native 自带的 libclang (rustc 基于 LLVM)
-    local rust_lib="${RUST_NATIVE}/usr/lib"
-    if [ -d "${rust_lib}" ]; then
-        export LIBCLANG_PATH="${rust_lib}"
-        bbnote "Set LIBCLANG_PATH=${LIBCLANG_PATH} (from Rust toolchain)"
-    else
-        bbwarn "Rust toolchain lib directory not found: ${rust_lib}"
+    # 优先使用 clang-native 提供的 libclang，然后尝试系统路径
+    local libclang_found=0
+    
+    # 方案 1: clang-native staging sysroot
+    if [ -d "${STAGING_DIR_NATIVE}/usr/lib" ]; then
+        if find "${STAGING_DIR_NATIVE}/usr/lib" -name "libclang*.so*" 2>/dev/null | grep -q .; then
+            export LIBCLANG_PATH="${STAGING_DIR_NATIVE}/usr/lib"
+            bbnote "Set LIBCLANG_PATH=${LIBCLANG_PATH} (from clang-native)"
+            libclang_found=1
+        fi
+    fi
+    
+    # 方案 2: 系统路径（如果 clang-native 未提供）
+    if [ $libclang_found -eq 0 ]; then
+        for syspath in /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib /usr/local/lib; do
+            if [ -d "$syspath" ] && find "$syspath" -name "libclang*.so*" 2>/dev/null | grep -q .; then
+                export LIBCLANG_PATH="$syspath"
+                bbnote "Set LIBCLANG_PATH=${LIBCLANG_PATH} (from system)"
+                libclang_found=1
+                break
+            fi
+        done
+    fi
+    
+    if [ $libclang_found -eq 0 ]; then
+        bbwarn "libclang.so not found! bindgen will fail."
+        bbwarn "Install it with: apt-get install -y libclang-dev"
     fi
 
     # Rust build scripts invoke "cc" directly; provide a stable shim to gcc.
