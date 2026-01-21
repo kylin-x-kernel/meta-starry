@@ -5,6 +5,9 @@ LICENSE = "CLOSED"
 
 inherit native
 
+do_fetch[noexec] = "1"
+do_unpack[noexec] = "1"
+do_patch[noexec] = "1"
 do_configure[noexec] = "1"
 do_compile[noexec] = "1"
 
