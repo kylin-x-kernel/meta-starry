@@ -24,6 +24,8 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=175792518e4ac015ab6696d16c4f607e"
 
 inherit arceos-features deploy externalsrc
 
+DEPENDS:append = " llvm-native"
+
 # ==================== 内核提供 ====================
 # 提供虚拟内核，供 image 配方使用
 PROVIDES += "virtual/kernel"
