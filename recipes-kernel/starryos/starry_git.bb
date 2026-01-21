@@ -94,6 +94,7 @@ do_cleanall[noexec] = "1"
 do_fetch[noexec] = "1"
 do_unpack[noexec] = "1"
 do_patch[noexec] = "1"
+SOURCE_DATE_EPOCH = "1609459200"
 
 # ==================== 平台兼容性 ====================
 COMPATIBLE_MACHINE = "(aarch64-qemu-virt|riscv64-qemu-virt|loongarch64-qemu-virt|x86_64-qemu-q35)"
