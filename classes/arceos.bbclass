@@ -37,6 +37,7 @@ DEPENDS:append = " \
     axconfig-gen-native \
     cargo-binutils-native \
     cmake-native \
+    llvm-native \
 "
 
 # ==================== 变量声明 ====================
