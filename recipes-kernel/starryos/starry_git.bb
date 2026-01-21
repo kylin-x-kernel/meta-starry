@@ -95,6 +95,12 @@ do_fetch[noexec] = "1"
 do_unpack[noexec] = "1"
 do_patch[noexec] = "1"
 SOURCE_DATE_EPOCH = "1609459200"
+do_configure[vardepsexclude] += "DATE TIME DATETIME"
+do_compile[vardepsexclude] += "DATE TIME DATETIME"
+do_install[vardepsexclude] += "DATE TIME DATETIME"
+do_deploy[vardepsexclude] += "DATE TIME DATETIME"
+do_populate_sysroot[vardepsexclude] += "DATE TIME DATETIME"
+do_deploy_source_date_epoch[vardepsexclude] += "DATE TIME DATETIME"
 
 # ==================== 平台兼容性 ====================
 COMPATIBLE_MACHINE = "(aarch64-qemu-virt|riscv64-qemu-virt|loongarch64-qemu-virt|x86_64-qemu-q35)"
