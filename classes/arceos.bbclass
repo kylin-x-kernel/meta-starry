@@ -37,7 +37,6 @@ DEPENDS:append = " \
     axconfig-gen-native \
     cargo-binutils-native \
     cmake-native \
-    llvm-native \
 "
 
 # ==================== 变量声明 ====================
@@ -311,10 +310,13 @@ do_compile() {
     fi
     
     # LIBCLANG_PATH for bindgen (Rust FFI bindings generator)
-    # llvm-native provides libclang.so
-    if [ -d "${STAGING_DIR_NATIVE}/usr/lib" ]; then
-        export LIBCLANG_PATH="${STAGING_DIR_NATIVE}/usr/lib"
-        bbnote "Set LIBCLANG_PATH=${LIBCLANG_PATH}"
+    # 使用 rust-prebuilt-native 自带的 libclang (rustc 基于 LLVM)
+    local rust_lib="${RUST_NATIVE}/usr/lib"
+    if [ -d "${rust_lib}" ]; then
+        export LIBCLANG_PATH="${rust_lib}"
+        bbnote "Set LIBCLANG_PATH=${LIBCLANG_PATH} (from Rust toolchain)"
+    else
+        bbwarn "Rust toolchain lib directory not found: ${rust_lib}"
     fi
 
     # Rust build scripts invoke "cc" directly; provide a stable shim to gcc.
