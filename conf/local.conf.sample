@@ -60,8 +60,8 @@ INHERIT:remove = "sanity"
 # ==================== 国内镜像源 ====================
 # 使用国内镜像加速源码下载（中科院软件所镜像站）
 # 注意：仅作为备选镜像，不代理 Git 仓库
-INHERIT += "own-mirrors"
-SOURCE_MIRROR_URL = "https://mirror.iscas.ac.cn/yocto/mirror/sources/"
+#INHERIT += "own-mirrors"
+#SOURCE_MIRROR_URL = "https://mirror.iscas.ac.cn/yocto/mirror/sources/"
 
 # PREMIRRORS 会强制优先使用镜像，但镜像可能不完整，已禁用
 # 如需启用，请确保镜像源有完整的文件
