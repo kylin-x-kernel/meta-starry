@@ -308,6 +308,13 @@ do_compile() {
         export CXX="${BUILD_CXX}"
         export AR="${BUILD_AR}"
     fi
+    
+    # LIBCLANG_PATH for bindgen (Rust FFI bindings generator)
+    # llvm-native provides libclang.so
+    if [ -d "${STAGING_DIR_NATIVE}/usr/lib" ]; then
+        export LIBCLANG_PATH="${STAGING_DIR_NATIVE}/usr/lib"
+        bbnote "Set LIBCLANG_PATH=${LIBCLANG_PATH}"
+    fi
 
     # Rust build scripts invoke "cc" directly; provide a stable shim to gcc.
     if ! command -v cc >/dev/null 2>&1; then
