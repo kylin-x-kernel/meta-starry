@@ -42,20 +42,7 @@ sudo sysctl -p /etc/sysctl.d/99-yocto.conf
 
 ### 1. 克隆项目
 
-```bash
-mkdir -p ~/starry-workspace
-cd ~/starry-workspace
-git clone https://gitee.com/openkylin/meta-starry.git
-```
-
-### 2. 自动设置环境
-
-```bash
-cd meta-starry
-./setup-layers
-```
-
-这会自动克隆依赖的 Yocto 层（poky、meta-openembedded）。
+见 Starryos readme
 
 ### 3. 初始化构建环境
 
