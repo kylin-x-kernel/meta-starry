@@ -39,10 +39,11 @@ INHERIT:remove = "sanity"
 
 # ==================== 下载与缓存目录 ====================
 # 可选：使用共享目录加速多次构建
-#DL_DIR = "/home/yean/code/downloads"
-#SSTATE_DIR = "/home/yean/code/sstate"
-#DL_DIR = "/home/yocto/yocto-cache/downloads"
-#SSTATE_DIR = "/home/yocto/yocto-cache/sstate"
+#DL_DIR = "/workspace/downloads"
+#SSTATE_DIR = "/workspace/sstate"
+#DL_DIR = "/home/yean/yocto-cache/downloads"
+#SSTATE_DIR = "/home/yean/yocto-cache/sstate"
+#这里的路径换成你自己的，最简单就是直接把yean换成你的用户名，写的不对会报错。
 
 
 # ==================== EXTERNALSRC 配置 ====================
